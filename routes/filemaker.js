@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { requireApiKey } = require('../middleware/requireApiKey');
 const { ensureSlotsForSupplier, ensureSlotsForAllSuppliers } = require('../lib/slotgen');
@@ -10,6 +11,10 @@ router.use(requireApiKey);
 
 function setupLink(type, token) {
   return `${process.env.APP_BASE_URL}/set-password.html?type=${type}&token=${token}`;
+}
+
+function inviteLink(externalId, token) {
+  return `${process.env.APP_BASE_URL}/add-attendee.html?member=${encodeURIComponent(externalId)}&token=${token}`;
 }
 
 // ---- PUSH: exhibition days -------------------------------------------------
@@ -70,52 +75,47 @@ router.post('/suppliers', async (req, res) => {
   res.json({ ok: true, count: suppliers.length, created: created.length });
 });
 
-// ---- PUSH: members ----------------------------------------------------------
-// Body: { "members": [ { external_id, name, email, company, day_external_id, window_start, window_end } ] }
+// ---- PUSH: members (companies) ----------------------------------------------
+// Body: { "members": [ { external_id, name, email, company } ] }
+// Each newly-created member gets a durable invite link, emailed to the primary
+// contact, which they can forward to any colleagues attending - each person
+// uses the same link to add themselves as an individual attendee.
 router.post('/members', async (req, res) => {
   const members = req.body.members || [];
-  const existingStmt = db.prepare('SELECT id FROM members WHERE external_id = ?');
-  const dayStmt = db.prepare('SELECT id FROM exhibition_days WHERE external_id = ?');
-
+  const existingStmt = db.prepare('SELECT id, invite_token FROM members WHERE external_id = ?');
   const insert = db.prepare(`
-    INSERT INTO members (external_id, name, email, company, day_id, window_start, window_end, setup_token)
-    VALUES (@external_id, @name, @email, @company, @day_id, @window_start, @window_end, @setup_token)
+    INSERT INTO members (external_id, name, email, company, invite_token)
+    VALUES (@external_id, @name, @email, @company, @invite_token)
   `);
   const update = db.prepare(`
-    UPDATE members SET name=@name, email=@email, company=@company, day_id=@day_id,
-      window_start=@window_start, window_end=@window_end, updated_at=datetime('now')
+    UPDATE members SET name=@name, email=@email, company=@company, updated_at=datetime('now')
     WHERE external_id=@external_id
   `);
 
   const created = [];
-  const errors = [];
   for (const m of members) {
-    const day = m.day_external_id ? dayStmt.get(m.day_external_id) : null;
-    if (m.day_external_id && !day) {
-      errors.push({ external_id: m.external_id, error: `Unknown day_external_id '${m.day_external_id}'` });
-      continue;
-    }
-    const row = { ...m, day_id: day ? day.id : null };
     const existing = existingStmt.get(m.external_id);
     if (existing) {
-      update.run(row);
+      update.run(m);
     } else {
-      const token = crypto.randomBytes(20).toString('hex');
-      insert.run({ ...row, setup_token: token });
-      created.push({ ...m, token });
+      const inviteToken = crypto.randomBytes(12).toString('hex');
+      insert.run({ ...m, invite_token: inviteToken });
+      created.push({ ...m, inviteToken });
     }
   }
 
   for (const c of created) {
     await sendEmail(
       c.email,
-      'Set up your Cedabond Exhibition account',
-      `Hi ${c.name},\n\nYou're registered to attend the Cedabond exhibition. ` +
-      `Set your password here to view supplier meeting requests and book time slots:\n${setupLink('member', c.token)}\n`
+      'Register your team for the Cedabond Exhibition',
+      `Hi ${c.name},\n\n${c.company || 'Your company'} is registered to attend the Cedabond exhibition.\n\n` +
+      `Please use the link below to add yourself as an attendee, and feel free to forward it to any ` +
+      `colleagues who'll also be attending - each person adds their own details and gets their own login ` +
+      `to book meetings:\n${inviteLink(c.external_id, c.inviteToken)}\n`
     );
   }
 
-  res.json({ ok: true, count: members.length, created: created.length, errors });
+  res.json({ ok: true, count: members.length, created: created.length });
 });
 
 // ---- PULL: activity since a given sync_log id --------------------------------
@@ -128,14 +128,47 @@ router.get('/activity', (req, res) => {
   res.json({ lastId, events });
 });
 
-// ---- Staff convenience: list any setup links not yet used (in case an email bounced) ---
+// ---- Staff convenience: list any invite/setup links not yet used or re-sendable ---
 router.get('/setup-links', (req, res) => {
-  const members = db.prepare("SELECT external_id, name, email, setup_token FROM members WHERE setup_token IS NOT NULL").all();
+  const members = db.prepare("SELECT external_id, name, email, invite_token FROM members WHERE invite_token IS NOT NULL").all();
   const suppliers = db.prepare("SELECT external_id, name, email, setup_token FROM suppliers WHERE setup_token IS NOT NULL").all();
   res.json({
-    members: members.map(m => ({ ...m, link: setupLink('member', m.setup_token) })),
+    members: members.map(m => ({ ...m, link: inviteLink(m.external_id, m.invite_token) })),
     suppliers: suppliers.map(s => ({ ...s, link: setupLink('supplier', s.setup_token) }))
   });
+});
+
+// ---- Staff-triggered: register a supplier's login (password decided in FileMaker) ----
+// FileMaker generates the password and sends the confirmation email itself (so a
+// permanent, lookup-able copy exists there for support calls). This endpoint's job
+// is purely to store the account so the supplier can actually log in - it does NOT
+// generate a password or send any email of its own.
+// Body: { external_id, name, company, password, emails: ["a@x.com", "b@x.com", ...] }
+router.post('/suppliers/acknowledge', async (req, res) => {
+  const { external_id, name, company, password, emails } = req.body;
+  if (!external_id || !name || !password || !Array.isArray(emails) || !emails.length) {
+    return res.status(400).json({ error: 'external_id, name, password, and at least one email are required' });
+  }
+  const cleanEmails = [...new Set(emails.map(e => e.trim().toLowerCase()).filter(Boolean))];
+  const hash = bcrypt.hashSync(password, 10);
+
+  let supplier = db.prepare('SELECT * FROM suppliers WHERE external_id = ?').get(external_id);
+
+  if (!supplier) {
+    const result = db.prepare(`
+      INSERT INTO suppliers (external_id, name, email, company, password_hash)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(external_id, name, cleanEmails[0], company || null, hash);
+    supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(result.lastInsertRowid);
+  } else {
+    db.prepare(`UPDATE suppliers SET name = ?, company = ?, password_hash = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(name, company || null, hash, supplier.id);
+  }
+
+  const insertEmail = db.prepare('INSERT OR IGNORE INTO supplier_emails (supplier_id, email) VALUES (?, ?)');
+  for (const e of cleanEmails) insertEmail.run(supplier.id, e);
+
+  res.json({ ok: true, supplier_id: supplier.id, emails: cleanEmails });
 });
 
 module.exports = router;
