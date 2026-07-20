@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmxmlsnippet type="FMObjectList">
+  <!-- Pins the script to the MEM layout/table occurrence so MEM::_PK_member_f3 etc.
+       always resolve against the correct context, even if the button that calls
+       this script lives elsewhere. -->
+  <Step enable="True" id="0" name="Go to Layout">
+    <Value><![CDATA["MEM"]]></Value>
+  </Step>
+
+  <!-- Capture the attendee's name and email via a custom dialog bound to two global fields,
+       since "Show Custom Dialog" can only write into fields, not script variables. -->
+  <Step enable="True" id="1" name="Show Custom Dialog">
+    <Title><![CDATA["Push Member to Scheduler"]]></Title>
+    <Message><![CDATA["Enter the attendee's name and email for " & MEM::member_name_f1 & " (" & MEM::company_f2 & ")"]]></Message>
+    <InputField1><![CDATA[MEM::g_attendee_name]]></InputField1>
+    <InputField2><![CDATA[MEM::g_attendee_email]]></InputField2>
+  </Step>
+
+  <Step enable="True" id="2" name="If">
+    <Calculation><![CDATA[Get ( LastMessageChoice ) = 2 // Cancel]]></Calculation>
+  </Step>
+  <Step enable="True" id="3" name="Exit Script">
+    <Value><![CDATA[]]></Value>
+  </Step>
+  <Step enable="True" id="4" name="End If"/>
+
+  <Step enable="True" id="5" name="Set Variable">
+    <Calculation><![CDATA[$apikey]]></Calculation>
+    <Value><![CDATA["PUT_YOUR_FM_API_KEY_HERE"]]></Value>
+  </Step>
+
+  <!-- name/email come from the dialog inputs just entered; external_id/company come from the record -->
+  <Step enable="True" id="6" name="Set Variable">
+    <Calculation><![CDATA[$json]]></Calculation>
+    <Value><![CDATA[JSONSetElement ( "{}" ;
+  ["members[0].external_id" ; MEM::_PK_member_f3 ; JSONString] ;
+  ["members[0].name" ; MEM::g_attendee_name ; JSONString] ;
+  ["members[0].email" ; MEM::g_attendee_email ; JSONString] ;
+  ["members[0].company" ; MEM::company_f2 ; JSONString]
+)]]></Value>
+  </Step>
+
+  <!-- Optional: pin them to an exhibition day/time window up front. Leave commented out
+       if attendees pick their own day/window from the scheduler portal instead.
+  ["members[0].day_external_id" ; "DAY1" ; JSONString] ;
+  ["members[0].window_start" ; "09:00" ; JSONString] ;
+  ["members[0].window_end" ; "13:00" ; JSONString] ;
+  -->
+
+  <Step enable="True" id="7" name="Set Variable">
+    <Calculation><![CDATA[$curlOptions]]></Calculation>
+    <Value><![CDATA["-X POST -H \"X-API-Key: " & $apikey & "\" -H \"Content-Type: application/json\" -d @$json"]]></Value>
+  </Step>
+
+  <Step enable="True" id="8" name="Insert from URL">
+    <Calculation><![CDATA[$result]]></Calculation>
+    <Value><![CDATA["https://your-app-url/api/filemaker/members"]]></Value>
+    <Options>
+      <NoDialog>True</NoDialog>
+      <CurlOptions><![CDATA[$curlOptions]]></CurlOptions>
+    </Options>
+  </Step>
+
+  <Step enable="True" id="9" name="If">
+    <Calculation><![CDATA[IsEmpty ( Filter ( $result ; "ok" ) ) or not JSONGetElement ( $result ; "ok" )]]></Calculation>
+  </Step>
+  <Step enable="True" id="10" name="Show Custom Dialog">
+    <Title><![CDATA["Push Member Failed"]]></Title>
+    <Message><![CDATA[$result]]></Message>
+  </Step>
+  <Step enable="True" id="11" name="Else"/>
+  <Step enable="True" id="12" name="Show Custom Dialog">
+    <Title><![CDATA["Pushed"]]></Title>
+    <Message><![CDATA["Attendee record sent to the scheduler. A setup email will be sent to " & MEM::g_attendee_email & " if this is a new attendee."]]></Message>
+  </Step>
+  <Step enable="True" id="13" name="End If"/>
+</fmxmlsnippet>

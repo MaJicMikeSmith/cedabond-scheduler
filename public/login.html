@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Cedabond Exhibition</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="wrap narrow">
+    <div class="card">
+      <h1>Cedabond Exhibition</h1>
+      <p class="muted">Sign in to manage your exhibition meetings.</p>
+      <form id="loginForm">
+        <label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="email">
+        <label for="password">Password</label>
+        <input type="password" id="password" required autocomplete="current-password">
+        <div class="error" id="err"></div>
+        <button type="submit" class="primary" style="width:100%">Sign in</button>
+      </form>
+      <p class="muted" style="margin-top:16px">
+        First time here? Use the setup link from your email to create a password.
+      </p>
+    </div>
+  </div>
+  <script src="/js/common.js"></script>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('err');
+      errEl.textContent = '';
+      try {
+        const data = await api('POST', '/api/auth/login', {
+          email: document.getElementById('email').value.trim(),
+          password: document.getElementById('password').value
+        });
+        window.location.href = data.redirect;
+      } catch (err) {
+        errEl.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

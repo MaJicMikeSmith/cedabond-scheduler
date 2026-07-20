@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmxmlsnippet type="FMObjectList">
+  <!-- Pins the script to the SUP layout/table occurrence so SUP::_PK_supplier etc.
+       always resolve against the correct context, even if the button that calls
+       this script lives elsewhere. -->
+  <Step enable="True" id="0" name="Go to Layout">
+    <Value><![CDATA["SUP"]]></Value>
+  </Step>
+  <Step enable="True" id="1" name="Set Variable">
+    <Calculation><![CDATA[$apikey]]></Calculation>
+    <Value><![CDATA["PUT_YOUR_FM_API_KEY_HERE"]]></Value>
+  </Step>
+  <Step enable="True" id="2" name="Set Variable">
+    <Calculation><![CDATA[$json]]></Calculation>
+    <Value><![CDATA[JSONSetElement ( "{}" ;
+  ["suppliers[0].external_id" ; SUP::_PK_supplier ; JSONString] ;
+  ["suppliers[0].name" ; SUP::supplier_name_f1 ; JSONString] ;
+  ["suppliers[0].email" ; SUP::sup_email ; JSONString] ;
+  ["suppliers[0].company" ; SUP::supplier_name_f1 ; JSONString]
+)]]></Value>
+  </Step>
+  <Step enable="True" id="3" name="Set Variable">
+    <Calculation><![CDATA[$curlOptions]]></Calculation>
+    <Value><![CDATA["-X POST -H \"X-API-Key: " & $apikey & "\" -H \"Content-Type: application/json\" -d @$json"]]></Value>
+  </Step>
+  <Step enable="True" id="4" name="Insert from URL">
+    <Calculation><![CDATA[$result]]></Calculation>
+    <Value><![CDATA["https://your-app-url/api/filemaker/suppliers"]]></Value>
+    <Options>
+      <NoDialog>True</NoDialog>
+      <CurlOptions><![CDATA[$curlOptions]]></CurlOptions>
+    </Options>
+  </Step>
+  <Step enable="True" id="5" name="If">
+    <Calculation><![CDATA[IsEmpty ( Filter ( $result ; "ok" ) ) or not JSONGetElement ( $result ; "ok" )]]></Calculation>
+  </Step>
+  <Step enable="True" id="6" name="Show Custom Dialog">
+    <Title><![CDATA["Push Supplier Failed"]]></Title>
+    <Message><![CDATA[$result]]></Message>
+  </Step>
+  <Step enable="True" id="7" name="End If"/>
+</fmxmlsnippet>
