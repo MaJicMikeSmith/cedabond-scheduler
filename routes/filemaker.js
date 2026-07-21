@@ -13,10 +13,6 @@ function setupLink(type, token) {
   return `${process.env.APP_BASE_URL}/set-password.html?type=${type}&token=${token}`;
 }
 
-function inviteLink(externalId, token) {
-  return `${process.env.APP_BASE_URL}/add-attendee.html?member=${encodeURIComponent(externalId)}&token=${token}`;
-}
-
 // ---- PUSH: exhibition days -------------------------------------------------
 // Body: { "days": [ { external_id, label, date, start_time, end_time, slot_minutes } ] }
 router.post('/exhibition-days', (req, res) => {
@@ -40,7 +36,7 @@ router.post('/exhibition-days', (req, res) => {
   }
 });
 
-// ---- PUSH: suppliers --------------------------------------------------------
+// ---- PUSH: suppliers (bulk, self-service setup link) -----------------------
 // Body: { "suppliers": [ { external_id, name, email, company } ] }
 router.post('/suppliers', async (req, res) => {
   try {
@@ -85,60 +81,10 @@ router.post('/suppliers', async (req, res) => {
   }
 });
 
-// ---- PUSH: members (companies) ----------------------------------------------
-// Body: { "members": [ { external_id, name, email, company } ] }
-// Each newly-created member gets a durable invite link, emailed to the primary
-// contact, which they can forward to any colleagues attending - each person
-// uses the same link to add themselves as an individual attendee.
-router.post('/members', async (req, res) => {
-  try {
-    const members = req.body.members || [];
-    const existingStmt = db.prepare('SELECT id, invite_token FROM members WHERE external_id = ?');
-    const insert = db.prepare(`
-      INSERT INTO members (external_id, name, email, company, invite_token)
-      VALUES (@external_id, @name, @email, @company, @invite_token)
-    `);
-    const update = db.prepare(`
-      UPDATE members SET name=@name, email=@email, company=@company, updated_at=datetime('now')
-      WHERE external_id=@external_id
-    `);
-
-    const created = [];
-    for (const m of members) {
-      const existing = existingStmt.get(String(m.external_id));
-      if (existing) {
-        update.run({ ...m, external_id: String(m.external_id) });
-      } else {
-        const inviteToken = crypto.randomBytes(12).toString('hex');
-        insert.run({ ...m, external_id: String(m.external_id), invite_token: inviteToken });
-        created.push({ ...m, inviteToken });
-      }
-    }
-
-    for (const c of created) {
-      await sendEmail(
-        c.email,
-        'Register your team for the Cedabond Exhibition',
-        `Hi ${c.name},\n\n${c.company || 'Your company'} is registered to attend the Cedabond exhibition.\n\n` +
-        `Please use the link below to add yourself as an attendee, and feel free to forward it to any ` +
-        `colleagues who'll also be attending - each person adds their own details and gets their own login ` +
-        `to book meetings:\n${inviteLink(c.external_id, c.inviteToken)}\n`
-      );
-    }
-
-    res.json({ ok: true, count: members.length, created: created.length });
-  } catch (err) {
-    console.error('members push error:', err);
-    res.status(500).json({ error: 'Server error: ' + err.message });
-  }
-});
-
 // ---- Staff-triggered: register a supplier's login (password decided in FileMaker) ----
-// FileMaker generates the password and sends the confirmation email itself (so a
-// permanent, lookup-able copy exists there for support calls). This endpoint's job
-// is purely to store the account so the supplier can actually log in - it does NOT
-// generate a password or send any email of its own.
-// Body: { external_id, name, company, password, emails: ["a@x.com", "b@x.com", ...] }
+// FileMaker generates the password and sends the confirmation email itself.
+// This endpoint just stores the account - no password generation, no email.
+// Body: { external_id, name, company, password, emails: ["a@x.com", ...] }
 router.post('/suppliers/acknowledge', async (req, res) => {
   try {
     const { external_id, name, company, password, emails } = req.body;
@@ -152,8 +98,6 @@ router.post('/suppliers/acknowledge', async (req, res) => {
     let supplier = db.prepare('SELECT * FROM suppliers WHERE external_id = ?').get(extId);
 
     if (!supplier) {
-      // Someone else might already hold the primary email (e.g. re-testing, or a
-      // genuine handover) - reassign rather than crash on the unique constraint.
       const emailOwner = db.prepare('SELECT * FROM suppliers WHERE email = ?').get(cleanEmails[0]);
       if (emailOwner) {
         db.prepare(`UPDATE suppliers SET external_id = ?, name = ?, company = ?, password_hash = ?, updated_at = datetime('now') WHERE id = ?`)
@@ -176,13 +120,95 @@ router.post('/suppliers/acknowledge', async (req, res) => {
 
     res.json({ ok: true, supplier_id: supplier.id, emails: cleanEmails });
   } catch (err) {
-    console.error('acknowledge error:', err);
+    console.error('supplier acknowledge error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+// ---- Staff-triggered: register a member company + its attendee list -------
+// FileMaker generates the shared password and sends the confirmation email
+// itself - same pattern as suppliers/acknowledge. Attendees are purely
+// informational (badges/catering) and are NOT tied to login - the whole
+// company shares one password. Each call REPLACES the member's attendee
+// list entirely with what's sent, since FileMaker is the source of truth.
+// Body: { external_id, name, company, password,
+//         attendees: [ { name, job_description, email, phone, arrival, departure, day_external_ids: [...] } ] }
+router.post('/members/acknowledge', async (req, res) => {
+  try {
+    const { external_id, name, company, password, attendees } = req.body;
+    if (!external_id || !name || !password) {
+      return res.status(400).json({ error: 'external_id, name, and password are required' });
+    }
+    const extId = String(external_id);
+    const hash = bcrypt.hashSync(password, 10);
+    const attendeeList = Array.isArray(attendees) ? attendees : [];
+    const primaryEmail = req.body.email || (attendeeList.find(a => a.email) || {}).email;
+
+    let member = db.prepare('SELECT * FROM members WHERE external_id = ?').get(extId);
+
+    if (!member) {
+      if (!primaryEmail) {
+        return res.status(400).json({ error: 'At least one email (top-level, or on an attendee) is required for a new member' });
+      }
+      const cleanEmail = primaryEmail.trim().toLowerCase();
+      const emailOwner = db.prepare('SELECT * FROM members WHERE email = ?').get(cleanEmail);
+      if (emailOwner) {
+        db.prepare(`UPDATE members SET external_id = ?, name = ?, company = ?, password_hash = ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(extId, name, company || null, hash, emailOwner.id);
+        member = db.prepare('SELECT * FROM members WHERE id = ?').get(emailOwner.id);
+      } else {
+        const result = db.prepare(`
+          INSERT INTO members (external_id, name, email, company, password_hash)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(extId, name, cleanEmail, company || null, hash);
+        member = db.prepare('SELECT * FROM members WHERE id = ?').get(result.lastInsertRowid);
+      }
+    } else {
+      db.prepare(`UPDATE members SET name = ?, company = ?, password_hash = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(name, company || null, hash, member.id);
+    }
+
+    // Replace the attendee list wholesale - simplest way to stay in sync with
+    // whatever FileMaker currently shows, no diffing needed.
+    const oldAttendeeIds = db.prepare('SELECT id FROM attendees WHERE member_id = ?').all(member.id).map(r => r.id);
+    if (oldAttendeeIds.length) {
+      const placeholders = oldAttendeeIds.map(() => '?').join(',');
+      db.prepare(`DELETE FROM attendee_days WHERE attendee_id IN (${placeholders})`).run(...oldAttendeeIds);
+    }
+    db.prepare('DELETE FROM attendees WHERE member_id = ?').run(member.id);
+
+    const insertAttendee = db.prepare(`
+      INSERT INTO attendees (member_id, name, job_description, email, phone, arrival, departure)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertAttendeeDay = db.prepare('INSERT OR IGNORE INTO attendee_days (attendee_id, day_id) VALUES (?, ?)');
+    const findDay = db.prepare('SELECT id FROM exhibition_days WHERE external_id = ?');
+
+    for (const a of attendeeList) {
+      const result = insertAttendee.run(
+        member.id,
+        a.name || '(unnamed)',
+        a.job_description || null,
+        a.email || null,
+        a.phone || null,
+        a.arrival || null,
+        a.departure || null
+      );
+      const attendeeId = result.lastInsertRowid;
+      for (const dayExtId of (a.day_external_ids || [])) {
+        const day = findDay.get(String(dayExtId));
+        if (day) insertAttendeeDay.run(attendeeId, day.id);
+      }
+    }
+
+    res.json({ ok: true, member_id: member.id, attendee_count: attendeeList.length });
+  } catch (err) {
+    console.error('member acknowledge error:', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
 
 // ---- PULL: activity since a given sync_log id --------------------------------
-// GET /api/filemaker/activity?since=123  -> rows with id > 123, plus the new high-water mark
 router.get('/activity', (req, res) => {
   try {
     const since = Number(req.query.since || 0);
@@ -196,13 +222,11 @@ router.get('/activity', (req, res) => {
   }
 });
 
-// ---- Staff convenience: list any invite/setup links not yet used or re-sendable ---
+// ---- Staff convenience: list any supplier setup links not yet used --------
 router.get('/setup-links', (req, res) => {
   try {
-    const members = db.prepare("SELECT external_id, name, email, invite_token FROM members WHERE invite_token IS NOT NULL").all();
     const suppliers = db.prepare("SELECT external_id, name, email, setup_token FROM suppliers WHERE setup_token IS NOT NULL").all();
     res.json({
-      members: members.map(m => ({ ...m, link: inviteLink(m.external_id, m.invite_token) })),
       suppliers: suppliers.map(s => ({ ...s, link: setupLink('supplier', s.setup_token) }))
     });
   } catch (err) {

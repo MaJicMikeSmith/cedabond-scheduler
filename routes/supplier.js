@@ -8,17 +8,15 @@ const router = express.Router();
 router.use(requireRole('supplier'));
 
 // List all attending member companies, and whether this supplier has already
-// sent them a request. Day/window is now per-attendee, not per-company, so
-// suppliers see the company list only here - individual attendee schedules
-// are private to that attendee until they book (visible in /schedule below).
+// sent them a request. Bookings now belong directly to the member company
+// (one shared login per company), so no join through attendees is needed.
 router.get('/members', (req, res) => {
   const supplierId = req.session.user.id;
   const members = db.prepare(`
     SELECT m.id, m.name, m.company, m.email,
            r.status AS request_status,
            (SELECT COUNT(*) FROM bookings b
-              JOIN attendees a ON a.id = b.attendee_id
-              WHERE a.member_id = m.id AND b.supplier_id = ? AND b.cancelled_at IS NULL) AS booking_count
+              WHERE b.member_id = m.id AND b.supplier_id = ? AND b.cancelled_at IS NULL) AS booking_count
     FROM members m
     LEFT JOIN meeting_requests r ON r.member_id = m.id AND r.supplier_id = ?
     ORDER BY m.name
@@ -54,17 +52,18 @@ router.post('/requests', async (req, res) => {
   res.json({ ok: true });
 });
 
-// This supplier's full slot schedule across both days.
+// This supplier's full slot schedule across both days. Bookings now belong
+// directly to the member company, so we join members straight off the
+// booking rather than through an attendee.
 router.get('/schedule', (req, res) => {
   const supplierId = req.session.user.id;
   const slots = db.prepare(`
     SELECT s.id, s.start_time, s.end_time, s.status, d.label AS day_label, d.date AS day_date,
-           b.id AS booking_id, a.name AS attendee_name, m.company AS member_company
+           b.id AS booking_id, m.name AS member_name, m.company AS member_company
     FROM slots s
     JOIN exhibition_days d ON d.id = s.day_id
     LEFT JOIN bookings b ON b.slot_id = s.id AND b.cancelled_at IS NULL
-    LEFT JOIN attendees a ON a.id = b.attendee_id
-    LEFT JOIN members m ON m.id = a.member_id
+    LEFT JOIN members m ON m.id = b.member_id
     WHERE s.supplier_id = ?
     ORDER BY d.date, s.start_time
   `).all(supplierId);

@@ -34,14 +34,13 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/filemaker', require('./routes/filemaker'));
 app.use('/api/supplier', require('./routes/supplier'));
 app.use('/api/member', require('./routes/member'));
-app.use('/api/invite', require('./routes/invite')); // public - gated by member external_id + invite_token, not a login
 
 // Gate the portal pages themselves behind login (the JS/CSS assets used by both
 // portals stay public so the pages can actually render before/while checking auth).
-// Note: the "member" portal path is kept for continuity, but it's really the
-// individual ATTENDEE's own portal now - each attendee has their own login.
+// Both suppliers and members now log in with one shared company-level password -
+// no self-service registration flow, everything is set up via FileMaker.
 app.use('/supplier', requirePageRole('supplier'), express.static(path.join(__dirname, 'public/supplier')));
-app.use('/member', requirePageRole('attendee'), express.static(path.join(__dirname, 'public/member')));
+app.use('/member', requirePageRole('member'), express.static(path.join(__dirname, 'public/member')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;

@@ -11,23 +11,27 @@ function signSocketToken(role, id) {
   return `${payload}:${sig}`;
 }
 
-// Member/attendee login - email + password, unchanged.
-router.post('/login', (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+// Member login - password only. The member's PK is embedded in the password
+// itself (e.g. "SUNSHINE-42"), so no email is needed - the number on the end
+// identifies the company. One shared password for the whole organisation;
+// any attendee given it can book on the company's behalf.
+router.post('/member-login', (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'Password required' });
 
-  const attendee = db.prepare('SELECT * FROM attendees WHERE email = ?').get(email.toLowerCase());
-  if (!attendee || !attendee.password_hash || !bcrypt.compareSync(password, attendee.password_hash)) {
-    return res.status(401).json({ error: 'Incorrect email or password' });
+  const match = password.match(/-(\d+)$/);
+  if (!match) return res.status(401).json({ error: 'Incorrect password' });
+
+  const member = db.prepare('SELECT * FROM members WHERE external_id = ?').get(match[1]);
+  if (!member || !member.password_hash || !bcrypt.compareSync(password, member.password_hash)) {
+    return res.status(401).json({ error: 'Incorrect password' });
   }
 
-  req.session.user = { id: attendee.id, role: 'attendee', name: attendee.name, email: attendee.email };
-  res.json({ ok: true, role: 'attendee', redirect: '/member/' });
+  req.session.user = { id: member.id, role: 'member', name: member.company || member.name, email: member.email };
+  res.json({ ok: true, role: 'member', redirect: '/member/' });
 });
 
-// Supplier login - password only. The supplier's PK is embedded in the password
-// itself (e.g. "SUNSHINE-217"), so no email is needed to identify the account -
-// the number on the end tells us exactly which supplier to check against.
+// Supplier login - password only, same pattern.
 router.post('/supplier-login', (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Password required' });
@@ -51,35 +55,10 @@ router.post('/logout', (req, res) => {
 router.get('/me', (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
   const { role, id } = req.session.user;
-  const response = {
+  res.json({
     ...req.session.user,
     socketToken: signSocketToken(role, id)
-  };
-  // Attendees also join a company-wide room, so a new request/booking/cancellation
-  // notifies every attendee from that member company, not just the one who acted.
-  if (role === 'attendee') {
-    const attendee = db.prepare('SELECT member_id FROM attendees WHERE id = ?').get(id);
-    if (attendee) response.companySocketToken = signSocketToken('company', attendee.member_id);
-  }
-  res.json(response);
-});
-
-// First-time setup for ATTENDEES only: the token emailed when they register
-// via a member's invite link is exchanged for a password. Suppliers don't use
-// this - their password is generated and emailed directly (see
-// POST /api/filemaker/suppliers/acknowledge).
-router.post('/set-password', (req, res) => {
-  const { token, type, password } = req.body;
-  if (!token || !type || !password) return res.status(400).json({ error: 'Missing fields' });
-  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  if (type !== 'attendee') return res.status(400).json({ error: 'Invalid type' });
-
-  const account = db.prepare('SELECT * FROM attendees WHERE setup_token = ?').get(token);
-  if (!account) return res.status(400).json({ error: 'This setup link is invalid or has already been used' });
-
-  const hash = bcrypt.hashSync(password, 10);
-  db.prepare('UPDATE attendees SET password_hash = ?, setup_token = NULL WHERE id = ?').run(hash, account.id);
-  res.json({ ok: true });
+  });
 });
 
 module.exports = router;
