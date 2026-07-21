@@ -42,7 +42,7 @@ async function loadSlots(supplierId) {
 
   const slots = await api('GET', `/api/member/suppliers/${supplierId}/slots`);
   if (!slots.length) {
-    grid.innerHTML = '<p class="empty">No slots fall within your attendance day/hours for this supplier.</p>';
+    grid.innerHTML = '<p class="empty">No slots fall within the day(s) you\'re attending for this supplier.</p>';
     return;
   }
 
@@ -52,7 +52,7 @@ async function loadSlots(supplierId) {
   wrap.className = 'slot-grid';
   for (const s of slots) {
     const div = document.createElement('div');
-    const mine = s.status === 'booked' && s.booked_by_member_id === currentMemberId;
+    const mine = s.status === 'booked' && s.booked_by_attendee_id === currentAttendeeId;
     div.className = `slot ${mine ? 'mine' : s.status}`;
     div.innerHTML = `${s.start_time}<small>${mine ? 'your booking' : s.status}</small>`;
     if (s.status === 'available') {
@@ -115,7 +115,7 @@ async function loadBookings() {
   });
 }
 
-let currentMemberId = null;
+let currentAttendeeId = null;
 
 (async function init() {
   await loadSuppliers();
@@ -132,6 +132,6 @@ let currentMemberId = null;
     const sel = document.getElementById('supplierSelect').value;
     if (sel) loadSlots(sel);
   });
-  currentMemberId = me.id;
+  currentAttendeeId = me.id;
   document.getElementById('whoami').textContent = me.name;
 })();

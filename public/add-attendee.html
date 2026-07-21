@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Register to attend — Cedabond Exhibition</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="wrap narrow">
+    <div class="card">
+      <h1>Register to attend</h1>
+      <p class="muted" id="intro">Checking your invite link…</p>
+
+      <form id="attendeeForm" style="display:none">
+        <label for="name">Your name</label>
+        <input type="text" id="name" required autocomplete="name">
+
+        <label for="job_description">Job title (optional)</label>
+        <input type="text" id="job_description" autocomplete="organization-title">
+
+        <label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="email">
+
+        <label for="phone">Phone (optional)</label>
+        <input type="tel" id="phone" autocomplete="tel">
+
+        <label>Which day(s) will you attend?</label>
+        <div id="dayList" style="margin-bottom:14px"></div>
+
+        <label for="arrival">Expected arrival (optional)</label>
+        <input type="datetime-local" id="arrival">
+
+        <label for="departure">Expected departure (optional)</label>
+        <input type="datetime-local" id="departure">
+
+        <div class="error" id="err"></div>
+        <button type="submit" class="primary" style="width:100%">Register</button>
+      </form>
+
+      <div id="doneMsg" style="display:none">
+        <p><strong>You're registered.</strong> Check your email for a link to set your password — once that's done you can sign in to book meetings with suppliers.</p>
+        <p class="muted">If any colleagues are also attending, feel free to forward them this same link — each person registers separately.</p>
+        <button class="secondary" style="width:100%" onclick="resetForm()">Register another attendee</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const memberExternalId = params.get('member');
+    const token = params.get('token');
+    let days = [];
+
+    function resetForm() {
+      document.getElementById('doneMsg').style.display = 'none';
+      document.getElementById('attendeeForm').style.display = 'block';
+      document.getElementById('attendeeForm').reset();
+    }
+
+    (async function init() {
+      const intro = document.getElementById('intro');
+      if (!memberExternalId || !token) {
+        intro.textContent = 'This link is missing information. Please use the link from your email exactly as sent.';
+        return;
+      }
+
+      try {
+        const invite = await api('GET', `/api/invite/${encodeURIComponent(memberExternalId)}?token=${encodeURIComponent(token)}`);
+        intro.textContent = `Registering as an attendee for ${invite.company} at the Cedabond exhibition. Add your details below.`;
+
+        days = await api('GET', `/api/invite/${encodeURIComponent(memberExternalId)}/days?token=${encodeURIComponent(token)}`);
+        const dayList = document.getElementById('dayList');
+        dayList.innerHTML = days.map(d =>
+          `<label style="font-weight:400; display:flex; align-items:center; gap:8px; margin-bottom:6px">
+            <input type="checkbox" value="${d.id}" style="width:auto; margin:0"> ${d.label} (${d.date})
+          </label>`
+        ).join('') || '<p class="muted">No exhibition days have been set up yet.</p>';
+
+        document.getElementById('attendeeForm').style.display = 'block';
+      } catch (err) {
+        intro.textContent = err.message;
+      }
+    })();
+
+    document.getElementById('attendeeForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('err');
+      errEl.textContent = '';
+
+      const dayIds = Array.from(document.querySelectorAll('#dayList input[type=checkbox]:checked')).map(el => Number(el.value));
+
+      try {
+        await api('POST', `/api/invite/${encodeURIComponent(memberExternalId)}/attendees?token=${encodeURIComponent(token)}`, {
+          name: document.getElementById('name').value.trim(),
+          job_description: document.getElementById('job_description').value.trim(),
+          email: document.getElementById('email').value.trim(),
+          phone: document.getElementById('phone').value.trim(),
+          arrival: document.getElementById('arrival').value || null,
+          departure: document.getElementById('departure').value || null,
+          day_ids: dayIds
+        });
+        document.getElementById('attendeeForm').style.display = 'none';
+        document.getElementById('doneMsg').style.display = 'block';
+      } catch (err) {
+        errEl.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

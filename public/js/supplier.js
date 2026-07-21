@@ -12,7 +12,7 @@ function sortMembers(members) {
     let av, bv;
     if (key === 'surname') { av = surnameOf(a.name); bv = surnameOf(b.name); }
     else if (key === 'company') { av = a.company || ''; bv = b.company || ''; }
-    else { av = a.window_start || a.booked_start_time || ''; bv = b.window_start || b.booked_start_time || ''; }
+    else { av = String(a.booking_count || 0); bv = String(b.booking_count || 0); }
     return av.localeCompare(bv) * dir;
   });
 }
@@ -25,17 +25,16 @@ function renderMembers() {
 
   for (const m of members) {
     const tr = document.createElement('tr');
-    const attending = m.day_label ? `${m.day_label} (${m.window_start || '—'}–${m.window_end || '—'})` : '—';
     let actionHtml;
     if (m.request_status === 'pending') actionHtml = '<span class="pill pending">Requested</span>';
     else if (m.request_status === 'booked') {
-      const time = m.booked_start_time ? ` ${m.booked_start_time}-${m.booked_end_time}` : '';
-      actionHtml = `<span class="pill booked">Booked${time}</span>`;
+      const count = m.booking_count ? ` (${m.booking_count} attendee${m.booking_count > 1 ? 's' : ''} booked)` : '';
+      actionHtml = `<span class="pill booked">Booked${count}</span>`;
     }
     else if (m.request_status === 'cancelled') actionHtml = '<button class="secondary small" data-req="' + m.id + '">Request again</button>';
     else actionHtml = '<button class="primary small" data-req="' + m.id + '">Request meeting</button>';
 
-    tr.innerHTML = `<td>${m.name}</td><td>${m.company || ''}</td><td>${attending}</td><td>${actionHtml}</td>`;
+    tr.innerHTML = `<td>${m.name}</td><td>${m.company || ''}</td><td>${actionHtml}</td>`;
     tbody.appendChild(tr);
   }
 
@@ -93,7 +92,7 @@ async function loadSchedule() {
     for (const s of byDay[day]) {
       const div = document.createElement('div');
       div.className = `slot ${s.status}`;
-      div.innerHTML = `${s.start_time}<small>${s.status === 'booked' ? s.member_name : s.status}</small>`;
+      div.innerHTML = `${s.start_time}<small>${s.status === 'booked' ? s.attendee_name : s.status}</small>`;
       if (s.status === 'available') {
         div.title = 'Tap to block this slot';
         div.addEventListener('click', () => toggleSlot(s.id, 'block'));
@@ -101,7 +100,7 @@ async function loadSchedule() {
         div.title = 'Tap to release this slot';
         div.addEventListener('click', () => toggleSlot(s.id, 'unblock'));
       } else {
-        div.title = `Booked by ${s.member_name}`;
+        div.title = `Booked by ${s.attendee_name}${s.member_company ? ' (' + s.member_company + ')' : ''}`;
       }
       grid.appendChild(div);
     }
@@ -123,8 +122,8 @@ async function toggleSlot(slotId, action) {
   await loadSchedule();
   const { me } = await connectRealtime((msg) => {
     showToast(
-      msg.type === 'booking' ? `${msg.member_name} booked ${msg.start_time}` :
-      msg.type === 'cancellation' ? `${msg.member_name} cancelled ${msg.start_time} — now free` :
+      msg.type === 'booking' ? `${msg.attendee_name} (${msg.member_name}) booked ${msg.start_time}` :
+      msg.type === 'cancellation' ? `${msg.attendee_name} cancelled ${msg.start_time} — now free` :
       'Schedule updated'
     );
     loadSchedule();

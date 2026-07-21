@@ -11,29 +11,81 @@
     <div class="card">
       <h1>Cedabond Exhibition</h1>
       <p class="muted">Sign in to manage your exhibition meetings.</p>
-      <form id="loginForm">
+
+      <div style="display:flex; gap:8px; margin-bottom:18px">
+        <button type="button" id="tabMember" class="primary small" style="flex:1">Member</button>
+        <button type="button" id="tabSupplier" class="secondary small" style="flex:1">Supplier</button>
+      </div>
+
+      <form id="memberForm">
         <label for="email">Email</label>
         <input type="email" id="email" required autocomplete="email">
         <label for="password">Password</label>
         <input type="password" id="password" required autocomplete="current-password">
-        <div class="error" id="err"></div>
+        <div class="error" id="memberErr"></div>
         <button type="submit" class="primary" style="width:100%">Sign in</button>
       </form>
-      <p class="muted" style="margin-top:16px">
+
+      <form id="supplierForm" style="display:none">
+        <label for="supplierPassword">Password</label>
+        <input type="password" id="supplierPassword" required autocomplete="current-password">
+        <p class="muted" style="margin-top:-8px">No email needed — just the password from your confirmation email, entered exactly as shown (including the number at the end).</p>
+        <div class="error" id="supplierErr"></div>
+        <button type="submit" class="primary" style="width:100%">Sign in</button>
+      </form>
+
+      <p class="muted" style="margin-top:16px" id="memberHint">
         First time here? Use the setup link from your email to create a password.
       </p>
     </div>
   </div>
   <script src="/js/common.js"></script>
   <script>
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    const tabMember = document.getElementById('tabMember');
+    const tabSupplier = document.getElementById('tabSupplier');
+    const memberForm = document.getElementById('memberForm');
+    const supplierForm = document.getElementById('supplierForm');
+    const memberHint = document.getElementById('memberHint');
+
+    function showMember() {
+      memberForm.style.display = 'block';
+      supplierForm.style.display = 'none';
+      memberHint.style.display = 'block';
+      tabMember.className = 'primary small';
+      tabSupplier.className = 'secondary small';
+    }
+    function showSupplier() {
+      memberForm.style.display = 'none';
+      supplierForm.style.display = 'block';
+      memberHint.style.display = 'none';
+      tabSupplier.className = 'primary small';
+      tabMember.className = 'secondary small';
+    }
+    tabMember.addEventListener('click', showMember);
+    tabSupplier.addEventListener('click', showSupplier);
+
+    memberForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const errEl = document.getElementById('err');
+      const errEl = document.getElementById('memberErr');
       errEl.textContent = '';
       try {
         const data = await api('POST', '/api/auth/login', {
           email: document.getElementById('email').value.trim(),
           password: document.getElementById('password').value
+        });
+        window.location.href = data.redirect;
+      } catch (err) {
+        errEl.textContent = err.message;
+      }
+    });
+
+    supplierForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('supplierErr');
+      errEl.textContent = '';
+      try {
+        const data = await api('POST', '/api/auth/supplier-login', {
+          password: document.getElementById('supplierPassword').value
         });
         window.location.href = data.redirect;
       } catch (err) {

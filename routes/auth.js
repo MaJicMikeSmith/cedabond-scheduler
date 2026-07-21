@@ -11,21 +11,37 @@ function signSocketToken(role, id) {
   return `${payload}:${sig}`;
 }
 
+// Member/attendee login - email + password, unchanged.
 router.post('/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-  const member = db.prepare('SELECT * FROM members WHERE email = ?').get(email.toLowerCase());
-  const supplier = db.prepare('SELECT * FROM suppliers WHERE email = ?').get(email.toLowerCase());
-  const account = member || supplier;
-  const role = member ? 'member' : supplier ? 'supplier' : null;
-
-  if (!account || !account.password_hash || !bcrypt.compareSync(password, account.password_hash)) {
+  const attendee = db.prepare('SELECT * FROM attendees WHERE email = ?').get(email.toLowerCase());
+  if (!attendee || !attendee.password_hash || !bcrypt.compareSync(password, attendee.password_hash)) {
     return res.status(401).json({ error: 'Incorrect email or password' });
   }
 
-  req.session.user = { id: account.id, role, name: account.name, email: account.email };
-  res.json({ ok: true, role, redirect: role === 'member' ? '/member/' : '/supplier/' });
+  req.session.user = { id: attendee.id, role: 'attendee', name: attendee.name, email: attendee.email };
+  res.json({ ok: true, role: 'attendee', redirect: '/member/' });
+});
+
+// Supplier login - password only. The supplier's PK is embedded in the password
+// itself (e.g. "SUNSHINE-217"), so no email is needed to identify the account -
+// the number on the end tells us exactly which supplier to check against.
+router.post('/supplier-login', (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'Password required' });
+
+  const match = password.match(/-(\d+)$/);
+  if (!match) return res.status(401).json({ error: 'Incorrect password' });
+
+  const supplier = db.prepare('SELECT * FROM suppliers WHERE external_id = ?').get(match[1]);
+  if (!supplier || !supplier.password_hash || !bcrypt.compareSync(password, supplier.password_hash)) {
+    return res.status(401).json({ error: 'Incorrect password' });
+  }
+
+  req.session.user = { id: supplier.id, role: 'supplier', name: supplier.name, email: supplier.email };
+  res.json({ ok: true, role: 'supplier', redirect: '/supplier/' });
 });
 
 router.post('/logout', (req, res) => {
@@ -34,27 +50,35 @@ router.post('/logout', (req, res) => {
 
 router.get('/me', (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
-  res.json({
+  const { role, id } = req.session.user;
+  const response = {
     ...req.session.user,
-    socketToken: signSocketToken(req.session.user.role, req.session.user.id)
-  });
+    socketToken: signSocketToken(role, id)
+  };
+  // Attendees also join a company-wide room, so a new request/booking/cancellation
+  // notifies every attendee from that member company, not just the one who acted.
+  if (role === 'attendee') {
+    const attendee = db.prepare('SELECT member_id FROM attendees WHERE id = ?').get(id);
+    if (attendee) response.companySocketToken = signSocketToken('company', attendee.member_id);
+  }
+  res.json(response);
 });
 
-// Step 1 of first-time setup: token (emailed when FileMaker first pushes the person in)
-// is exchanged for a password.
+// First-time setup for ATTENDEES only: the token emailed when they register
+// via a member's invite link is exchanged for a password. Suppliers don't use
+// this - their password is generated and emailed directly (see
+// POST /api/filemaker/suppliers/acknowledge).
 router.post('/set-password', (req, res) => {
   const { token, type, password } = req.body;
   if (!token || !type || !password) return res.status(400).json({ error: 'Missing fields' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  if (type !== 'attendee') return res.status(400).json({ error: 'Invalid type' });
 
-  const table = type === 'member' ? 'members' : type === 'supplier' ? 'suppliers' : null;
-  if (!table) return res.status(400).json({ error: 'Invalid type' });
-
-  const account = db.prepare(`SELECT * FROM ${table} WHERE setup_token = ?`).get(token);
+  const account = db.prepare('SELECT * FROM attendees WHERE setup_token = ?').get(token);
   if (!account) return res.status(400).json({ error: 'This setup link is invalid or has already been used' });
 
   const hash = bcrypt.hashSync(password, 10);
-  db.prepare(`UPDATE ${table} SET password_hash = ?, setup_token = NULL WHERE id = ?`).run(hash, account.id);
+  db.prepare('UPDATE attendees SET password_hash = ?, setup_token = NULL WHERE id = ?').run(hash, account.id);
   res.json({ ok: true });
 });
 

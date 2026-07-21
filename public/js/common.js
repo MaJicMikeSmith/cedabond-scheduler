@@ -27,11 +27,16 @@ function showToast(message) {
   el._t = setTimeout(() => el.classList.remove('show'), 3500);
 }
 
-/** Connects to Socket.io and joins this user's private room. Calls onUpdate(msg) on every event. */
+/** Connects to Socket.io and joins this user's private room (and, for attendees,
+ *  their company-wide room too, so colleagues' activity shows up live). Calls
+ *  onUpdate(msg) on every event. */
 async function connectRealtime(onUpdate) {
   const me = await api('GET', '/api/auth/me');
   const socket = io();
-  socket.on('connect', () => socket.emit('join', me.socketToken));
+  socket.on('connect', () => {
+    socket.emit('join', me.socketToken);
+    if (me.companySocketToken) socket.emit('join', me.companySocketToken);
+  });
   socket.on('update', onUpdate);
   return { socket, me };
 }
