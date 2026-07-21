@@ -10,6 +10,12 @@ const { attachSocketServer } = require('./lib/sync');
 const { initSockets } = require('./sockets');
 
 const app = express();
+
+// Render terminates HTTPS for us and forwards plain HTTP internally - without
+// this, Express doesn't realise the original connection was secure, so it
+// refuses to set the "secure" session cookie below, and logins silently fail.
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 const io = new Server(server);
 attachSocketServer(io);
