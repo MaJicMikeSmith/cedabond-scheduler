@@ -153,6 +153,8 @@ router.post('/bookings', async (req, res) => {
       await sendEmail(conflict.supplier_email, `${companyLabel} cancelled their meeting slot`,
         `Hi ${conflict.supplier_name},\n\n${companyLabel} has cancelled the ${conflict.start_time}-${conflict.end_time} slot to book another meeting. ` +
         `It is now available for other companies to book.\n`);
+      await sendEmail(member.email, `Your ${conflict.start_time}-${conflict.end_time} meeting with ${conflict.supplier_name} was cancelled`,
+        `Hi ${companyLabel},\n\nYour ${conflict.start_time}-${conflict.end_time} meeting with ${conflict.supplier_name} was cancelled to book another meeting instead.\n`);
     }
 
     const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(slot.supplier_id);
@@ -166,6 +168,10 @@ router.post('/bookings', async (req, res) => {
     await sendEmail(supplier.email, `${companyLabel} booked a meeting slot with you`,
       `Hi ${supplier.name},\n\n${companyLabel} has booked the ${slot.start_time}-${slot.end_time} slot. ` +
       `View your schedule in the supplier portal:\n${process.env.APP_BASE_URL}/supplier/\n`);
+
+    await sendEmail(member.email, `Booking confirmed: ${slot.start_time}-${slot.end_time} with ${supplier.name}`,
+      `Hi ${companyLabel},\n\nYour meeting with ${supplier.name} is confirmed for ${slot.start_time}-${slot.end_time}. ` +
+      `View or manage it in your member portal:\n${process.env.APP_BASE_URL}/member/\n`);
 
     res.json({ ok: true, booking_id: bookingId });
   } catch (err) {
@@ -203,6 +209,9 @@ router.post('/bookings/:id/cancel', async (req, res) => {
     await sendEmail(supplier.email, `${companyLabel} cancelled their meeting slot`,
       `Hi ${supplier.name},\n\n${companyLabel} has cancelled the ${slot.start_time}-${slot.end_time} slot. ` +
       `It is now available for other companies to book.\n`);
+
+    await sendEmail(member.email, `Cancelled: your ${slot.start_time}-${slot.end_time} meeting with ${supplier.name}`,
+      `Hi ${companyLabel},\n\nYour meeting with ${supplier.name} at ${slot.start_time}-${slot.end_time} has been cancelled.\n`);
 
     res.json({ ok: true });
   } catch (err) {
