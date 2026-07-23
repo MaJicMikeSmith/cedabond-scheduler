@@ -57,7 +57,7 @@
       errEl.textContent = '';
       try {
         const data = await api('POST', '/api/auth/member-login', {
-          password: document.getElementById('memberPassword').value
+          password: document.getElementById('memberPassword').value.trim()
         });
         window.location.href = data.redirect;
       } catch (err) {
@@ -70,7 +70,7 @@
       errEl.textContent = '';
       try {
         const data = await api('POST', '/api/auth/supplier-login', {
-          password: document.getElementById('supplierPassword').value
+          password: document.getElementById('supplierPassword').value.trim()
         });
         window.location.href = data.redirect;
       } catch (err) {

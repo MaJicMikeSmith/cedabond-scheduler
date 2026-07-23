@@ -16,7 +16,7 @@ function signSocketToken(role, id) {
 // identifies the company. One shared password for the whole organisation;
 // any attendee given it can book on the company's behalf.
 router.post('/member-login', (req, res) => {
-  const { password } = req.body;
+  const password = (req.body.password || '').trim();
   if (!password) return res.status(400).json({ error: 'Password required' });
 
   const match = password.match(/-(\d+)$/);
@@ -33,7 +33,7 @@ router.post('/member-login', (req, res) => {
 
 // Supplier login - password only, same pattern.
 router.post('/supplier-login', (req, res) => {
-  const { password } = req.body;
+  const password = (req.body.password || '').trim();
   if (!password) return res.status(400).json({ error: 'Password required' });
 
   const match = password.match(/-(\d+)$/);
