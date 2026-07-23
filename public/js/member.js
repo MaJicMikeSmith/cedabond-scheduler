@@ -1,3 +1,9 @@
+function formatUKDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}-${m}-${y}`;
+}
+
 let pendingRequestsBySupplier = {};
 
 async function loadRequests() {
@@ -14,7 +20,9 @@ async function loadRequests() {
     const action = r.status === 'pending'
       ? `<button class="primary small" data-view="${r.supplier_id}">View slots</button>`
       : '';
-    tr.innerHTML = `<td>${r.supplier_name}</td><td>${r.supplier_company || ''}</td>` +
+    const dateCell = r.booked_date ? formatUKDate(r.booked_date) : '';
+    const timeCell = r.booked_start_time ? `${r.booked_start_time}\u2013${r.booked_end_time}` : '';
+    tr.innerHTML = `<td>${r.supplier_name}</td><td>${dateCell}</td><td>${timeCell}</td>` +
       `<td><span class="pill ${r.status}">${r.status}</span></td><td>${action}</td>`;
     tbody.appendChild(tr);
   }
@@ -58,7 +66,7 @@ async function loadSlots(supplierId) {
   for (const { label, date, slots: daySlots } of byDay.values()) {
     const heading = document.createElement('h3');
     heading.className = 'day-heading';
-    heading.textContent = `${label} (${date})`;
+    heading.textContent = `${label} (${formatUKDate(date)})`;
     grid.appendChild(heading);
 
     const wrap = document.createElement('div');
@@ -107,7 +115,7 @@ async function loadBookings() {
 
   for (const b of bookings) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${b.day_label} (${b.day_date})</td><td>${b.start_time}–${b.end_time}</td>` +
+    tr.innerHTML = `<td>${b.day_label} (${formatUKDate(b.day_date)})</td><td>${b.start_time}–${b.end_time}</td>` +
       `<td>${b.supplier_name}</td><td><button class="danger small" data-cancel="${b.id}">Cancel</button></td>`;
     tbody.appendChild(tr);
   }

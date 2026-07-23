@@ -17,11 +17,15 @@ router.get('/requests', (req, res) => {
   try {
     const memberId = req.session.user.id;
     const requests = db.prepare(`
-      SELECT r.id, r.status, r.created_at, s.id AS supplier_id, s.name AS supplier_name, s.company AS supplier_company
+      SELECT r.id, r.status, r.created_at, s.id AS supplier_id, s.name AS supplier_name,
+             d.date AS booked_date, sl.start_time AS booked_start_time, sl.end_time AS booked_end_time
       FROM meeting_requests r
       JOIN suppliers s ON s.id = r.supplier_id
+      LEFT JOIN bookings b ON b.request_id = r.id AND b.cancelled_at IS NULL
+      LEFT JOIN slots sl ON sl.id = b.slot_id
+      LEFT JOIN exhibition_days d ON d.id = sl.day_id
       WHERE r.member_id = ?
-      ORDER BY r.created_at DESC
+      ORDER BY (d.date IS NULL), d.date, sl.start_time, r.created_at
     `).all(memberId);
     res.json(requests);
   } catch (err) {
