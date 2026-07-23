@@ -14,14 +14,19 @@ router.get('/members', (req, res) => {
   try {
     const supplierId = req.session.user.id;
     const members = db.prepare(`
-      SELECT m.id, m.name, m.company, m.email,
+      SELECT m.id, m.name, m.email,
              r.status AS request_status,
              (SELECT COUNT(*) FROM bookings b
-                WHERE b.member_id = m.id AND b.supplier_id = ? AND b.cancelled_at IS NULL) AS booking_count
+                WHERE b.member_id = m.id AND b.supplier_id = ? AND b.cancelled_at IS NULL) AS booking_count,
+             d.date AS booked_date, sl.start_time AS booked_start_time, sl.end_time AS booked_end_time
       FROM members m
       LEFT JOIN meeting_requests r ON r.member_id = m.id AND r.supplier_id = ?
+      LEFT JOIN bookings b2 ON b2.member_id = m.id AND b2.supplier_id = ? AND b2.cancelled_at IS NULL
+      LEFT JOIN slots sl ON sl.id = b2.slot_id
+      LEFT JOIN exhibition_days d ON d.id = sl.day_id
+      GROUP BY m.id
       ORDER BY m.name
-    `).all(supplierId, supplierId);
+    `).all(supplierId, supplierId, supplierId);
     res.json(members);
   } catch (err) {
     console.error('supplier members list error:', err);

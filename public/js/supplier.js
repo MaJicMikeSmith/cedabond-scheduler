@@ -11,10 +11,16 @@ function sortMembers(members) {
   return [...members].sort((a, b) => {
     let av, bv;
     if (key === 'surname') { av = surnameOf(a.name); bv = surnameOf(b.name); }
-    else if (key === 'company') { av = a.company || ''; bv = b.company || ''; }
+    else if (key === 'date') { av = a.booked_date || '9999-99-99'; bv = b.booked_date || '9999-99-99'; }
     else { av = String(a.booking_count || 0); bv = String(b.booking_count || 0); }
     return av.localeCompare(bv) * dir;
   });
+}
+
+function formatUKDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}-${m}-${y}`;
 }
 
 function renderMembers() {
@@ -26,15 +32,23 @@ function renderMembers() {
   for (const m of members) {
     const tr = document.createElement('tr');
     let actionHtml;
-    if (m.request_status === 'pending') actionHtml = '<span class="pill pending">Requested</span>';
-    else if (m.request_status === 'booked') {
-      const count = m.booking_count ? ` (${m.booking_count} meeting${m.booking_count > 1 ? 's' : ''} booked)` : '';
-      actionHtml = `<span class="pill booked">Booked${count}</span>`;
+    // Booking always wins, even without a meeting_requests row - a member can
+    // book ad-hoc without the supplier ever having requested them first.
+    if (m.booking_count > 0) {
+      const extra = m.booking_count > 1 ? ` (+${m.booking_count - 1} more)` : '';
+      actionHtml = `<span class="pill booked">Booked${extra}</span>`;
+    } else if (m.request_status === 'pending') {
+      actionHtml = '<span class="pill pending">Requested</span>';
+    } else if (m.request_status === 'cancelled') {
+      actionHtml = '<button class="secondary small" data-req="' + m.id + '">Request again</button>';
+    } else {
+      actionHtml = '<button class="primary small" data-req="' + m.id + '">Request meeting</button>';
     }
-    else if (m.request_status === 'cancelled') actionHtml = '<button class="secondary small" data-req="' + m.id + '">Request again</button>';
-    else actionHtml = '<button class="primary small" data-req="' + m.id + '">Request meeting</button>';
 
-    tr.innerHTML = `<td>${m.name}</td><td>${m.company || ''}</td><td>${actionHtml}</td>`;
+    const dateCell = m.booked_date ? formatUKDate(m.booked_date) : '';
+    const timeCell = m.booked_start_time ? `${m.booked_start_time}\u2013${m.booked_end_time}` : '';
+
+    tr.innerHTML = `<td>${m.name}</td><td>${dateCell}</td><td>${timeCell}</td><td>${actionHtml}</td>`;
     tbody.appendChild(tr);
   }
 
@@ -84,7 +98,7 @@ async function loadSchedule() {
   for (const day of Object.keys(byDay)) {
     const heading = document.createElement('div');
     heading.className = 'day-heading';
-    heading.textContent = `${day} — ${byDay[day][0].day_date}`;
+    heading.textContent = `${day} — ${formatUKDate(byDay[day][0].day_date)}`;
     container.appendChild(heading);
 
     const grid = document.createElement('div');
