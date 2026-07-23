@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS members (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   external_id   TEXT UNIQUE,
   name          TEXT NOT NULL,          -- primary contact name (informational)
-  email         TEXT NOT NULL UNIQUE,   -- primary contact email (informational, gets heads-up notifications)
+  email         TEXT NOT NULL,   -- primary contact email (informational, gets heads-up notifications; not unique)
   company       TEXT,
   password_hash TEXT,
   created_at    TEXT DEFAULT (datetime('now')),
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   external_id   TEXT UNIQUE,
   name          TEXT NOT NULL,
-  email         TEXT NOT NULL UNIQUE,  -- primary contact email, used for booking/schedule notifications
+  email         TEXT NOT NULL,  -- primary contact email, used for booking/schedule notifications (not unique - one contact can run multiple stands/brands)
   company       TEXT,
   password_hash TEXT,
   setup_token   TEXT,
