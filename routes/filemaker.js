@@ -98,7 +98,14 @@ router.post('/suppliers/acknowledge', async (req, res) => {
     let supplier = db.prepare('SELECT * FROM suppliers WHERE external_id = ?').get(extId);
 
     if (!supplier) {
-      const emailOwner = db.prepare('SELECT * FROM suppliers WHERE email = ?').get(cleanEmails[0]);
+      // Only merge into an email match if that row has no external_id of its own -
+      // i.e. a genuine orphan record, never one already claimed by a different
+      // confirmed supplier. Without this guard, several suppliers sharing one email
+      // (e.g. everything routed to a single test-mode address) silently overwrite
+      // each other's row instead of getting their own.
+      const emailOwner = db.prepare(
+        "SELECT * FROM suppliers WHERE email = ? AND (external_id IS NULL OR external_id = '')"
+      ).get(cleanEmails[0]);
       if (emailOwner) {
         db.prepare(`UPDATE suppliers SET external_id = ?, name = ?, company = ?, password_hash = ?, updated_at = datetime('now') WHERE id = ?`)
           .run(extId, name, company || null, hash, emailOwner.id);
@@ -151,7 +158,11 @@ router.post('/members/acknowledge', async (req, res) => {
         return res.status(400).json({ error: 'At least one email (top-level, or on an attendee) is required for a new member' });
       }
       const cleanEmail = primaryEmail.trim().toLowerCase();
-      const emailOwner = db.prepare('SELECT * FROM members WHERE email = ?').get(cleanEmail);
+      // Same guard as suppliers/acknowledge - only merge into a genuine orphan row,
+      // never one already claimed by a different confirmed member.
+      const emailOwner = db.prepare(
+        "SELECT * FROM members WHERE email = ? AND (external_id IS NULL OR external_id = '')"
+      ).get(cleanEmail);
       if (emailOwner) {
         db.prepare(`UPDATE members SET external_id = ?, name = ?, company = ?, password_hash = ?, updated_at = datetime('now') WHERE id = ?`)
           .run(extId, name, company || null, hash, emailOwner.id);
