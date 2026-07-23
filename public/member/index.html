@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Member Portal — Cedabond Exhibition</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Cedabond Exhibition<small>Member portal</small></div>
+    <div>
+      <span class="muted" id="whoami" style="margin-right:14px"></span>
+      <button class="secondary small" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <h2>Meeting requests</h2>
+      <p class="muted">Suppliers who'd like to meet you. Book one of their open slots below.</p>
+      <table id="requestsTable">
+        <thead><tr><th>Supplier</th><th>Company</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="requestsEmpty" style="display:none">No requests yet.</p>
+    </div>
+
+    <div class="card">
+      <h2>Book a meeting</h2>
+      <label for="supplierSelect">Choose a supplier</label>
+      <select id="supplierSelect" style="margin-bottom:14px; padding:8px; border-radius:8px; border:1px solid var(--border); width:100%; max-width:320px;"></select>
+      <div id="slotGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>My bookings</h2>
+      <table id="bookingsTable">
+        <thead><tr><th>Day</th><th>Time</th><th>Supplier</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="bookingsEmpty" style="display:none">No bookings yet.</p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/member.js"></script>
+</body>
+</html>
