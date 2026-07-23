@@ -90,6 +90,8 @@ th.sortable { text-decoration: underline; cursor: pointer; user-select: none; }
 th.sortable.sort-active { color: var(--accent-dark); }
 
 .slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.day-heading { margin-top: 20px; }
+.day-heading:first-of-type { margin-top: 8px; }
 .slot {
   border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; text-align: center;
   font-size: .82rem; font-weight: 600; cursor: pointer; background: var(--surface); transition: transform .1s;

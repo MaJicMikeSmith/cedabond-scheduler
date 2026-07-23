@@ -11,16 +11,6 @@ function getMember(id) {
   return db.prepare('SELECT * FROM members WHERE id = ?').get(id);
 }
 
-// Union of every day ANY attendee from this member is present - the company
-// can book on any of these days, regardless of who's actually doing the booking.
-function getMemberDayIds(memberId) {
-  return db.prepare(`
-    SELECT DISTINCT ad.day_id FROM attendee_days ad
-    JOIN attendees a ON a.id = ad.attendee_id
-    WHERE a.member_id = ?
-  `).all(memberId).map(r => r.day_id);
-}
-
 // Requests sent to this member company - anyone with the shared password sees
 // the same list, and any of them may respond and book to fulfil it.
 router.get('/requests', (req, res) => {
@@ -44,18 +34,16 @@ router.get('/suppliers', (req, res) => {
 // A supplier's slots, restricted to whichever day(s) any of this company's
 // attendees are present for (the union across all of them).
 router.get('/suppliers/:id/slots', (req, res) => {
-  const dayIds = getMemberDayIds(req.session.user.id);
-  if (!dayIds.length) return res.json([]); // no attendees/days registered yet
-
-  const placeholders = dayIds.map(() => '?').join(',');
   const slots = db.prepare(`
     SELECT s.id, s.start_time, s.end_time, s.status,
+           d.id AS day_id, d.label AS day_label, d.date AS day_date,
            b.member_id AS booked_by_member_id
     FROM slots s
+    JOIN exhibition_days d ON d.id = s.day_id
     LEFT JOIN bookings b ON b.slot_id = s.id AND b.cancelled_at IS NULL
-    WHERE s.supplier_id = ? AND s.day_id IN (${placeholders})
-    ORDER BY s.start_time
-  `).all(req.params.id, ...dayIds);
+    WHERE s.supplier_id = ?
+    ORDER BY d.date, s.start_time
+  `).all(req.params.id);
 
   res.json(slots);
 });

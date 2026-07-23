@@ -125,6 +125,10 @@ router.post('/suppliers/acknowledge', async (req, res) => {
     const insertEmail = db.prepare('INSERT OR IGNORE INTO supplier_emails (supplier_id, email) VALUES (?, ?)');
     for (const e of cleanEmails) insertEmail.run(supplier.id, e);
 
+    // Idempotent - safe to call on every confirmation, including re-confirmations.
+    // Never wipes existing bookings/blocks, only fills in any missing slot rows.
+    ensureSlotsForSupplier(supplier.id);
+
     res.json({ ok: true, supplier_id: supplier.id, emails: cleanEmails });
   } catch (err) {
     console.error('supplier acknowledge error:', err);

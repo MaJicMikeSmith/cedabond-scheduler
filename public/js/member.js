@@ -42,28 +42,42 @@ async function loadSlots(supplierId) {
 
   const slots = await api('GET', `/api/member/suppliers/${supplierId}/slots`);
   if (!slots.length) {
-    grid.innerHTML = '<p class="empty">No slots fall within the day(s) your registered attendees are present for this supplier.</p>';
+    grid.innerHTML = '<p class="empty">This supplier hasn\'t made any slots available yet.</p>';
     return;
   }
 
   const requestId = pendingRequestsBySupplier[supplierId] || null;
   grid.innerHTML = '';
-  const wrap = document.createElement('div');
-  wrap.className = 'slot-grid';
+
+  const byDay = new Map();
   for (const s of slots) {
-    const div = document.createElement('div');
-    const mine = s.status === 'booked' && s.booked_by_member_id === currentMemberId;
-    div.className = `slot ${mine ? 'mine' : s.status}`;
-    div.innerHTML = `${s.start_time}<small>${mine ? 'your booking' : s.status}</small>`;
-    if (s.status === 'available') {
-      div.title = 'Tap to book this slot';
-      div.addEventListener('click', () => bookSlot(s.id, requestId));
-    } else {
-      div.title = mine ? 'Your company\'s booked slot' : 'Not available';
-    }
-    wrap.appendChild(div);
+    if (!byDay.has(s.day_id)) byDay.set(s.day_id, { label: s.day_label, date: s.day_date, slots: [] });
+    byDay.get(s.day_id).slots.push(s);
   }
-  grid.appendChild(wrap);
+
+  for (const { label, date, slots: daySlots } of byDay.values()) {
+    const heading = document.createElement('h3');
+    heading.className = 'day-heading';
+    heading.textContent = `${label} (${date})`;
+    grid.appendChild(heading);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'slot-grid';
+    for (const s of daySlots) {
+      const div = document.createElement('div');
+      const mine = s.status === 'booked' && s.booked_by_member_id === currentMemberId;
+      div.className = `slot ${mine ? 'mine' : s.status}`;
+      div.innerHTML = `${s.start_time}<small>${mine ? 'your booking' : s.status}</small>`;
+      if (s.status === 'available') {
+        div.title = 'Tap to book this slot';
+        div.addEventListener('click', () => bookSlot(s.id, requestId));
+      } else {
+        div.title = mine ? 'Your company\'s booked slot' : 'Not available';
+      }
+      wrap.appendChild(div);
+    }
+    grid.appendChild(wrap);
+  }
 }
 
 async function bookSlot(slotId, requestId, confirmCancel) {
