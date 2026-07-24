@@ -28,8 +28,43 @@ router.post('/exhibition-days', (req, res) => {
     for (const d of days) {
       upsert.run({ slot_minutes: 20, ...d });
     }
+
+    // Remove any day FileMaker no longer sent, along with its slots and any
+    // bookings on those slots - FileMaker is the source of truth for which
+    // days exist.
+    const keepIds = days.map(d => d.external_id);
+    const staleDays = keepIds.length
+      ? db.prepare(`SELECT id FROM exhibition_days WHERE external_id NOT IN (${keepIds.map(() => '?').join(',')})`).all(...keepIds)
+      : db.prepare('SELECT id FROM exhibition_days').all();
+
+    const deleteBookingsForDay = db.prepare('DELETE FROM bookings WHERE slot_id IN (SELECT id FROM slots WHERE day_id = ?)');
+    const deleteSlotsForDay = db.prepare('DELETE FROM slots WHERE day_id = ?');
+    const deleteDay = db.prepare('DELETE FROM exhibition_days WHERE id = ?');
+    for (const { id } of staleDays) {
+      deleteBookingsForDay.run(id);
+      deleteSlotsForDay.run(id);
+      deleteDay.run(id);
+    }
+
     ensureSlotsForAllSuppliers();
-    res.json({ ok: true, count: days.length });
+
+    // A day's hours may have shrunk (not just been removed entirely) - clean up
+    // any now out-of-range slots left over from the old hours, same cascade
+    // as above.
+    const currentDays = db.prepare('SELECT * FROM exhibition_days').all();
+    const deleteBookingsForSlot = db.prepare('DELETE FROM bookings WHERE slot_id = ?');
+    const deleteSlot = db.prepare('DELETE FROM slots WHERE id = ?');
+    for (const day of currentDays) {
+      const outOfRange = db.prepare(
+        'SELECT id FROM slots WHERE day_id = ? AND (start_time < ? OR end_time > ?)'
+      ).all(day.id, day.start_time, day.end_time);
+      for (const { id } of outOfRange) {
+        deleteBookingsForSlot.run(id);
+        deleteSlot.run(id);
+      }
+    }
+
+    res.json({ ok: true, count: days.length, removed: staleDays.length });
   } catch (err) {
     console.error('exhibition-days error:', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
