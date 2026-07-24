@@ -9,7 +9,7 @@ let pendingRequestsBySupplier = {};
 async function loadRequests() {
   const requests = await api('GET', '/api/member/requests');
   pendingRequestsBySupplier = {};
-  for (const r of requests) if (r.status === 'pending') pendingRequestsBySupplier[r.supplier_id] = r.id;
+  for (const r of requests) if (r.status === 'pending' || r.status === 'booked') pendingRequestsBySupplier[r.supplier_id] = r.id;
 
   const tbody = document.querySelector('#requestsTable tbody');
   tbody.innerHTML = '';
@@ -17,13 +17,13 @@ async function loadRequests() {
 
   for (const r of requests) {
     const tr = document.createElement('tr');
-    const action = r.status === 'pending'
-      ? `<button class="primary small" data-view="${r.supplier_id}">View slots</button>`
-      : '';
     const dateCell = r.booked_date ? formatUKDate(r.booked_date) : '';
     const timeCell = r.booked_start_time ? `${r.booked_start_time}\u2013${r.booked_end_time}` : '';
+    const statusCell = r.status === 'pending'
+      ? `<button class="pill pending" data-view="${r.supplier_id}" title="Click to view and book their available slots">Requested</button>`
+      : `<span class="pill ${r.status}">${r.status}</span>`;
     tr.innerHTML = `<td>${r.supplier_name}</td><td>${dateCell}</td><td>${timeCell}</td>` +
-      `<td><span class="pill ${r.status}">${r.status}</span></td><td>${action}</td>`;
+      `<td>${statusCell}</td>`;
     tbody.appendChild(tr);
   }
 
@@ -40,7 +40,7 @@ async function loadSuppliers() {
   const suppliers = await api('GET', '/api/member/suppliers');
   const select = document.getElementById('supplierSelect');
   select.innerHTML = '<option value="">Select a supplier…</option>' +
-    suppliers.map(s => `<option value="${s.id}">${s.name}${s.company ? ' — ' + s.company : ''}</option>`).join('');
+    suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
   select.addEventListener('change', () => loadSlots(select.value));
 }
 
