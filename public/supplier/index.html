@@ -10,14 +10,13 @@
   <div class="topbar">
     <div class="brand">Cedabond Exhibition<small>Supplier portal</small></div>
     <div>
-      <span class="muted" id="whoami" style="margin-right:14px"></span>
       <button class="secondary small" onclick="logout()">Sign out</button>
     </div>
   </div>
 
   <div class="wrap">
     <div class="grid-2">
-      <div class="card">
+      <div class="card card--pink">
         <h2>Members</h2>
         <p class="muted">Request a meeting with any attending member. They'll be notified and can book one of your open slots.</p>
         <table id="membersTable">
@@ -32,7 +31,8 @@
         <p class="empty" id="membersEmpty" style="display:none">No members loaded yet.</p>
       </div>
 
-      <div class="card">
+      <div class="card card--teal">
+        <h1 id="whoami" class="supplier-name"></h1>
         <h2>My schedule</h2>
         <p class="muted">Tap an open slot to block it (e.g. for a break). Tap a blocked slot to release it again.</p>
         <div id="schedule"></div>

@@ -8,6 +8,8 @@
   --text-muted: #6B6358;
   --accent: #0F6B5C;
   --accent-dark: #0B4F44;
+  --accent-pink: #D6467E;
+  --accent-blue: #2E7DBB;
   --warm: #C76B3B;
   --danger: #B3261E;
   --blocked: #D8D2C5;
@@ -44,8 +46,11 @@ a { color: var(--accent-dark); }
 
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 22px; margin-bottom: 20px;
+  padding: 22px; margin-bottom: 20px; border-top: 4px solid var(--border);
 }
+.card--teal { border-top-color: var(--accent); }
+.card--pink { border-top-color: var(--accent-pink); }
+.card--blue { border-top-color: var(--accent-blue); }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } }
@@ -72,6 +77,8 @@ button.danger:hover { background: #FBEDEB; }
 button.small { padding: 6px 10px; font-size: .8rem; }
 
 .error { color: var(--danger); font-size: .85rem; margin: -6px 0 14px; min-height: 1em; }
+.supplier-name { color: var(--accent-dark); margin-bottom: .15em; }
+
 .muted { color: var(--text-muted); font-size: .85rem; }
 .empty { color: var(--text-muted); font-style: italic; padding: 18px 0; }
 
@@ -82,7 +89,7 @@ button.small { padding: 6px 10px; font-size: .8rem; }
 button.pill { border: none; cursor: pointer; font-family: inherit; }
 button.pill:hover { filter: brightness(0.94); }
 .pill.pending { background: #FBEADF; color: var(--warm); }
-.pill.booked { background: #FBE8E6; color: var(--danger); }
+.pill.booked { background: #E1F0EC; color: var(--accent-dark); }
 .pill.cancelled { background: #F1ECE2; color: var(--text-muted); }
 
 table { width: 100%; border-collapse: collapse; }
