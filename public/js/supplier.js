@@ -1,16 +1,11 @@
 let allMembers = [];
-let memberSort = { key: 'surname', dir: 1 };
-
-function surnameOf(name) {
-  const parts = name.trim().split(/\s+/);
-  return parts.length > 1 ? parts[parts.length - 1] : name;
-}
+let memberSort = { key: 'name', dir: 1 };
 
 function sortMembers(members) {
   const { key, dir } = memberSort;
   return [...members].sort((a, b) => {
     let av, bv;
-    if (key === 'surname') { av = surnameOf(a.name); bv = surnameOf(b.name); }
+    if (key === 'name') { av = a.name; bv = b.name; }
     else if (key === 'date') { av = a.booked_date || '9999-99-99'; bv = b.booked_date || '9999-99-99'; }
     else { av = String(a.booking_count || 0); bv = String(b.booking_count || 0); }
     return av.localeCompare(bv) * dir;
