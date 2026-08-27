@@ -39,8 +39,14 @@ async function loadRequests() {
 async function loadSuppliers() {
   const suppliers = await api('GET', '/api/member/suppliers');
   const select = document.getElementById('supplierSelect');
-  select.innerHTML = '<option value="">Select a supplier…</option>' +
-    suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  if (!suppliers.length) {
+    select.innerHTML = '<option value="">No suppliers have requested a meeting with you yet</option>';
+    select.disabled = true;
+  } else {
+    select.disabled = false;
+    select.innerHTML = '<option value="">Select a supplier…</option>' +
+      suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  }
   select.addEventListener('change', () => loadSlots(select.value));
 }
 

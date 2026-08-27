@@ -34,10 +34,18 @@ router.get('/requests', (req, res) => {
   }
 });
 
-// Full supplier list, for ad-hoc browsing.
+// Suppliers who have requested a meeting with this member - not the full
+// supplier list. A member can only browse/book suppliers that requested them.
 router.get('/suppliers', (req, res) => {
   try {
-    const suppliers = db.prepare('SELECT id, name, company FROM suppliers ORDER BY name').all();
+    const memberId = req.session.user.id;
+    const suppliers = db.prepare(`
+      SELECT DISTINCT s.id, s.name, s.company
+      FROM suppliers s
+      JOIN meeting_requests r ON r.supplier_id = s.id
+      WHERE r.member_id = ? AND r.status IN ('pending', 'booked')
+      ORDER BY s.name
+    `).all(memberId);
     res.json(suppliers);
   } catch (err) {
     console.error('member suppliers list error:', err);
