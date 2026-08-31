@@ -17,24 +17,24 @@
 
   <div class="wrap">
     <div class="card card--pink">
-      <h2>Meeting requests</h2>
+      <h2 id="requestsHeading">Meeting requests</h2>
       <p class="muted">Suppliers who'd like to meet you. Book one of their open slots below.</p>
       <table id="requestsTable">
-        <thead><tr><th>Supplier</th><th>Date</th><th>Time</th><th>Status</th></tr></thead>
+        <thead><tr><th>Supplier</th><th>Day</th><th>Time</th><th>Status</th></tr></thead>
         <tbody></tbody>
       </table>
       <p class="empty" id="requestsEmpty" style="display:none">No requests yet.</p>
     </div>
 
     <div class="card card--teal">
-      <h2>Book a meeting</h2>
+      <h2>Respond to a meeting request by selecting a Supplier from the dropdown list</h2>
       <label for="supplierSelect">Choose a supplier</label>
       <select id="supplierSelect" style="margin-bottom:14px; padding:8px; border-radius:8px; border:1px solid var(--border); width:100%; max-width:320px;"></select>
       <div id="slotGrid"></div>
     </div>
 
     <div class="card card--blue">
-      <h2>My bookings</h2>
+      <h2>Meetings confirmed</h2>
       <table id="bookingsTable">
         <thead><tr><th>Day</th><th>Time</th><th>Supplier</th><th></th></tr></thead>
         <tbody></tbody>

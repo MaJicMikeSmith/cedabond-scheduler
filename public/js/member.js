@@ -94,7 +94,7 @@ async function loadSlots(supplierId) {
   for (const { label, date, slots: daySlots } of byDay.values()) {
     const heading = document.createElement('h3');
     heading.className = 'day-heading';
-    heading.textContent = `${label} (${formatUKDate(date)})`;
+    heading.textContent = `${label} - ${formatDayAbbr(date)} (${formatUKDate(date)})`;
     grid.appendChild(heading);
 
     const wrap = document.createElement('div');
@@ -143,7 +143,7 @@ async function loadBookings() {
 
   for (const b of bookings) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${b.day_label} (${formatUKDate(b.day_date)})</td><td>${b.start_time}–${b.end_time}</td>` +
+    tr.innerHTML = `<td>${b.day_label} - ${formatDayAbbr(b.day_date)} (${formatUKDate(b.day_date)})</td><td>${b.start_time}–${b.end_time}</td>` +
       `<td>${b.supplier_name}</td><td><button class="danger small" data-cancel="${b.id}">Cancel</button></td>`;
     tbody.appendChild(tr);
   }
@@ -184,4 +184,5 @@ let currentMemberId = null;
   });
   currentMemberId = me.id;
   document.getElementById('whoami').textContent = me.name;
+  document.getElementById('requestsHeading').textContent = `Meeting requests for ${me.name}`;
 })();

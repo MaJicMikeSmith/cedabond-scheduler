@@ -41,9 +41,15 @@ function renderMembers() {
     const isPending = m.request_status === 'pending';
 
     // Name is only a click-to-request action when there's no active request.
-    const nameCell = (isBooked || isPending)
-      ? m.name
-      : `<button class="link-action" data-request="${m.id}" title="Click to request a meeting">${m.name}</button>`;
+    // Styled to reflect status: bold once booked, red while pending.
+    let nameCell;
+    if (isBooked) {
+      nameCell = `<strong>${m.name}</strong>`;
+    } else if (isPending) {
+      nameCell = `<span style="color:var(--danger)">${m.name}</span>`;
+    } else {
+      nameCell = `<button class="link-action" data-request="${m.id}" title="Click to request a meeting">${m.name}</button>`;
+    }
 
     let statusHtml;
     if (isBooked) {
