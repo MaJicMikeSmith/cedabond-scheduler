@@ -2,7 +2,6 @@ const express = require('express');
 const db = require('../db');
 const { requireRole } = require('../middleware/requireAuth');
 const { recordEvent } = require('../lib/sync');
-const { sendEmail } = require('../lib/email');
 
 const router = express.Router();
 router.use(requireRole('supplier'));
@@ -91,10 +90,6 @@ router.post('/requests/batch', async (req, res) => {
         member_id: memberId, member_name: member.name
       }, { memberId });
 
-      await sendEmail(member.email, `${supplier.name} would like to meet you at the exhibition`,
-        `Hi ${member.name},\n\n${supplier.name} has requested a meeting with you at the exhibition. ` +
-        `Log in to your member portal to view their available time slots and book one:\n${process.env.APP_BASE_URL}/member/\n`);
-
       requested++;
     }
 
@@ -146,10 +141,6 @@ router.post('/requests', async (req, res) => {
       supplier_id: supplierId, supplier_name: supplier.name,
       member_id: memberId, member_name: member.name
     }, { memberId });
-
-    await sendEmail(member.email, `${supplier.name} would like to meet you at the exhibition`,
-      `Hi ${member.name},\n\n${supplier.name} has requested a meeting with you at the exhibition. ` +
-      `Log in to your member portal to view their available time slots and book one:\n${process.env.APP_BASE_URL}/member/\n`);
 
     res.json({ ok: true });
   } catch (err) {

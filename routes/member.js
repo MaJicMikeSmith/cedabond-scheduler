@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { requireRole } = require('../middleware/requireAuth');
 const { recordEvent } = require('../lib/sync');
-const { sendEmail } = require('../lib/email');
+const { sendTimetableEmail } = require('../lib/email');
 
 const router = express.Router();
 router.use(requireRole('member'));
@@ -162,11 +162,6 @@ router.post('/bookings', async (req, res) => {
         booking_id: conflict.booking_id, start_time: conflict.start_time, end_time: conflict.end_time,
         supplier_name: conflict.supplier_name, member_id: memberId, member_name: companyLabel
       }, { memberId });
-      await sendEmail(conflict.supplier_email, `${companyLabel} cancelled their meeting slot`,
-        `Hi ${conflict.supplier_name},\n\n${companyLabel} has cancelled the ${conflict.start_time}-${conflict.end_time} slot to book another meeting. ` +
-        `It is now available for other companies to book.\n`);
-      await sendEmail(member.email, `Your ${conflict.start_time}-${conflict.end_time} meeting with ${conflict.supplier_name} was cancelled`,
-        `Hi ${companyLabel},\n\nYour ${conflict.start_time}-${conflict.end_time} meeting with ${conflict.supplier_name} was cancelled to book another meeting instead.\n`);
     }
 
     const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(slot.supplier_id);
@@ -176,14 +171,6 @@ router.post('/bookings', async (req, res) => {
       member_id: memberId, member_name: companyLabel,
       source: request_id ? 'request' : 'adhoc'
     }, { supplierId: slot.supplier_id, memberId });
-
-    await sendEmail(supplier.email, `${companyLabel} booked a meeting slot with you`,
-      `Hi ${supplier.name},\n\n${companyLabel} has booked the ${slot.start_time}-${slot.end_time} slot. ` +
-      `View your schedule in the supplier portal:\n${process.env.APP_BASE_URL}/supplier/\n`);
-
-    await sendEmail(member.email, `Booking confirmed: ${slot.start_time}-${slot.end_time} with ${supplier.name}`,
-      `Hi ${companyLabel},\n\nYour meeting with ${supplier.name} is confirmed for ${slot.start_time}-${slot.end_time}. ` +
-      `View or manage it in your member portal:\n${process.env.APP_BASE_URL}/member/\n`);
 
     res.json({ ok: true, booking_id: bookingId });
   } catch (err) {
@@ -218,13 +205,6 @@ router.post('/bookings/:id/cancel', async (req, res) => {
       member_id: memberId, member_name: companyLabel
     }, { supplierId: booking.supplier_id, memberId });
 
-    await sendEmail(supplier.email, `${companyLabel} cancelled their meeting slot`,
-      `Hi ${supplier.name},\n\n${companyLabel} has cancelled the ${slot.start_time}-${slot.end_time} slot. ` +
-      `It is now available for other companies to book.\n`);
-
-    await sendEmail(member.email, `Cancelled: your ${slot.start_time}-${slot.end_time} meeting with ${supplier.name}`,
-      `Hi ${companyLabel},\n\nYour meeting with ${supplier.name} at ${slot.start_time}-${slot.end_time} has been cancelled.\n`);
-
     res.json({ ok: true });
   } catch (err) {
     console.error('member cancel booking error:', err);
@@ -256,10 +236,6 @@ router.post('/requests/:id/decline', async (req, res) => {
       member_id: memberId, member_name: companyLabel
     }, { supplierId: request.supplier_id, memberId });
 
-    await sendEmail(supplier.email, `${companyLabel} declined your meeting request`,
-      `Hi ${supplier.name},\n\n${companyLabel} has declined your meeting request. ` +
-      `This frees up a space if you'd like to request another member.\n`);
-
     res.json({ ok: true });
   } catch (err) {
     console.error('member decline request error:', err);
@@ -268,8 +244,9 @@ router.post('/requests/:id/decline', async (req, res) => {
 });
 
 // Email a plain-text copy of this member's confirmed timetable to whatever
-// address they give us - handy for having on a phone at the venue. Goes
-// through the same sendEmail() test-mode lockdown as everything else.
+// address they give us - handy for having on a phone at the venue. This is
+// the ONLY email the app ever sends. While testing, it's redirected to us
+// marked as a test; once live, it genuinely reaches the address typed in.
 router.post('/bookings/email-timetable', async (req, res) => {
   try {
     const memberId = req.session.user.id;
@@ -308,7 +285,7 @@ router.post('/bookings/email-timetable', async (req, res) => {
       `${b.day_label} - ${dayAbbr(b.day_date)} (${ukDate(b.day_date)})  ${b.start_time}-${b.end_time}  ${b.supplier_name}`
     );
 
-    await sendEmail(to, `Your Cedabond Exhibition meeting timetable - ${companyLabel}`,
+    await sendTimetableEmail(to, `Your Cedabond Exhibition meeting timetable - ${companyLabel}`,
       `Hi,\n\nHere's ${companyLabel}'s confirmed meeting timetable for the Cedabond Exhibition:\n\n` +
       lines.join('\n') + '\n');
 
