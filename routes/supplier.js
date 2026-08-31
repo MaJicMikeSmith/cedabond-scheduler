@@ -34,6 +34,77 @@ router.get('/members', (req, res) => {
   }
 });
 
+const MAX_REQUESTS = 40;
+
+// Send meeting requests to a batch of members in one hit (tick-list UI).
+// Only actions members that don't already have an active (pending/booked)
+// request - re-ticking a cancelled one re-activates it. Enforces a total
+// cap of MAX_REQUESTS active requests per supplier, counting existing ones.
+router.post('/requests/batch', async (req, res) => {
+  try {
+    const supplierId = req.session.user.id;
+    const memberIds = Array.isArray(req.body.member_ids)
+      ? [...new Set(req.body.member_ids.map(Number).filter(Number.isInteger))]
+      : [];
+    if (!memberIds.length) return res.status(400).json({ error: 'No members selected' });
+
+    const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(supplierId);
+
+    const activeRows = db.prepare(`
+      SELECT member_id FROM meeting_requests WHERE supplier_id = ? AND status IN ('pending', 'booked')
+    `).all(supplierId);
+    const activeIds = new Set(activeRows.map(r => r.member_id));
+
+    // Ignore any that are already active (shouldn't happen from the UI, but
+    // don't let a stale client double-count them against the cap).
+    const toRequest = memberIds.filter(id => !activeIds.has(id));
+
+    if (activeRows.length + toRequest.length > MAX_REQUESTS) {
+      const spaceLeft = Math.max(0, MAX_REQUESTS - activeRows.length);
+      return res.status(409).json({
+        error: `That's over the ${MAX_REQUESTS}-member limit - you have ${spaceLeft} space${spaceLeft === 1 ? '' : 's'} left.`
+      });
+    }
+
+    let requested = 0;
+    for (const memberId of toRequest) {
+      const member = db.prepare('SELECT * FROM members WHERE id = ?').get(memberId);
+      if (!member) continue;
+
+      const existing = db.prepare('SELECT * FROM meeting_requests WHERE supplier_id = ? AND member_id = ?')
+        .get(supplierId, memberId);
+
+      let requestId;
+      if (existing) {
+        db.prepare("UPDATE meeting_requests SET status = 'pending', created_at = datetime('now') WHERE id = ?")
+          .run(existing.id);
+        requestId = existing.id;
+      } else {
+        const result = db.prepare('INSERT INTO meeting_requests (supplier_id, member_id) VALUES (?, ?)')
+          .run(supplierId, memberId);
+        requestId = result.lastInsertRowid;
+      }
+
+      recordEvent('request', {
+        request_id: requestId,
+        supplier_id: supplierId, supplier_name: supplier.name,
+        member_id: memberId, member_name: member.name
+      }, { memberId });
+
+      await sendEmail(member.email, `${supplier.name} would like to meet you at the exhibition`,
+        `Hi ${member.name},\n\n${supplier.name} has requested a meeting with you at the exhibition. ` +
+        `Log in to your member portal to view their available time slots and book one:\n${process.env.APP_BASE_URL}/member/\n`);
+
+      requested++;
+    }
+
+    res.json({ ok: true, requested });
+  } catch (err) {
+    console.error('supplier batch request error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
 // Send a meeting request to a member.
 router.post('/requests', async (req, res) => {
   try {

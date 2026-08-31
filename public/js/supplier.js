@@ -1,5 +1,7 @@
 let allMembers = [];
 let memberSort = { key: 'name', dir: 1 };
+const MAX_REQUESTS = 40;
+let newSelections = new Set(); // member ids ticked this session, not yet submitted
 
 function sortMembers(members) {
   const { key, dir } = memberSort;
@@ -18,6 +20,20 @@ function formatUKDate(iso) {
   return `${d}-${m}-${y}`;
 }
 
+function activeCount() {
+  return allMembers.filter(m => m.booking_count > 0 || m.request_status === 'pending').length;
+}
+
+function updateSelectionUI() {
+  const btn = document.getElementById('requestSelectedBtn');
+  const label = document.getElementById('selectionCount');
+  btn.disabled = newSelections.size === 0;
+  const spaceLeft = MAX_REQUESTS - activeCount();
+  label.textContent = `${activeCount()} of ${MAX_REQUESTS} requested` +
+    (newSelections.size ? ` · ${newSelections.size} new selected` : '') +
+    ` · ${spaceLeft} space${spaceLeft === 1 ? '' : 's'} left`;
+}
+
 function renderMembers() {
   const members = sortMembers(allMembers);
   const tbody = document.querySelector('#membersTable tbody');
@@ -26,24 +42,31 @@ function renderMembers() {
 
   for (const m of members) {
     const tr = document.createElement('tr');
-    let actionHtml;
-    // Booking always wins, even without a meeting_requests row - a member can
-    // book ad-hoc without the supplier ever having requested them first.
-    if (m.booking_count > 0) {
+    const isBooked = m.booking_count > 0;
+    const isPending = m.request_status === 'pending';
+    const isLocked = isBooked || isPending; // already committed - can't untick
+    const isTicked = isLocked || newSelections.has(m.id);
+
+    const checkbox = `<input type="checkbox" data-member="${m.id}" ${isTicked ? 'checked' : ''} ${isLocked ? 'disabled' : ''}>`;
+
+    let statusHtml;
+    if (isBooked) {
       const extra = m.booking_count > 1 ? ` (+${m.booking_count - 1} more)` : '';
-      actionHtml = `<span class="pill booked">Booked${extra}</span>`;
-    } else if (m.request_status === 'pending') {
-      actionHtml = '<span class="pill pending">Requested</span>';
+      statusHtml = `<span class="pill booked">Booked${extra}</span>`;
+    } else if (isPending) {
+      statusHtml = '<span class="pill pending">Requested</span>';
+    } else if (newSelections.has(m.id)) {
+      statusHtml = '<span class="pill pending">Selected</span>';
     } else if (m.request_status === 'cancelled') {
-      actionHtml = '<button class="secondary small" data-req="' + m.id + '">Request again</button>';
+      statusHtml = '<span class="pill">Cancelled</span>';
     } else {
-      actionHtml = '<button class="primary small" data-req="' + m.id + '">Request meeting</button>';
+      statusHtml = '';
     }
 
     const dateCell = m.booked_date ? formatUKDate(m.booked_date) : '';
     const timeCell = m.booked_start_time ? `${m.booked_start_time}\u2013${m.booked_end_time}` : '';
 
-    tr.innerHTML = `<td>${m.name}</td><td>${dateCell}</td><td>${timeCell}</td><td>${actionHtml}</td>`;
+    tr.innerHTML = `<td>${checkbox}</td><td>${m.name}</td><td>${dateCell}</td><td>${timeCell}</td><td>${statusHtml}</td>`;
     tbody.appendChild(tr);
   }
 
@@ -51,20 +74,40 @@ function renderMembers() {
     th.classList.toggle('sort-active', th.dataset.sort === memberSort.key);
   });
 
-  tbody.querySelectorAll('button[data-req]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      try {
-        await api('POST', '/api/supplier/requests', { member_id: Number(btn.dataset.req) });
-        showToast('Meeting request sent');
-        loadMembers();
-      } catch (err) {
-        showToast(err.message);
-        btn.disabled = false;
+  tbody.querySelectorAll('input[type="checkbox"][data-member]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const id = Number(cb.dataset.member);
+      if (cb.checked) {
+        if (activeCount() + newSelections.size + 1 > MAX_REQUESTS) {
+          cb.checked = false;
+          showToast(`You're at the ${MAX_REQUESTS}-member limit - untick someone else first`);
+          return;
+        }
+        newSelections.add(id);
+      } else {
+        newSelections.delete(id);
       }
+      renderMembers();
     });
   });
+
+  updateSelectionUI();
 }
+
+document.getElementById('requestSelectedBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('requestSelectedBtn');
+  if (!newSelections.size) return;
+  btn.disabled = true;
+  try {
+    const { requested } = await api('POST', '/api/supplier/requests/batch', { member_ids: [...newSelections] });
+    showToast(`${requested} meeting request${requested === 1 ? '' : 's'} sent`);
+    newSelections.clear();
+    await loadMembers();
+  } catch (err) {
+    showToast(err.message);
+    btn.disabled = false;
+  }
+});
 
 async function loadMembers() {
   allMembers = await api('GET', '/api/supplier/members');
