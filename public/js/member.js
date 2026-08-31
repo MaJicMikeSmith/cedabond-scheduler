@@ -17,11 +17,15 @@ async function loadRequests() {
   pendingRequestsBySupplier = {};
   for (const r of requests) if (r.status === 'pending' || r.status === 'booked') pendingRequestsBySupplier[r.supplier_id] = r.id;
 
+  // Once a request is confirmed (booked), it moves down to "Meetings
+  // confirmed" and drops out of this list entirely.
+  const openRequests = requests.filter(r => r.status !== 'booked');
+
   const tbody = document.querySelector('#requestsTable tbody');
   tbody.innerHTML = '';
-  document.getElementById('requestsEmpty').style.display = requests.length ? 'none' : 'block';
+  document.getElementById('requestsEmpty').style.display = openRequests.length ? 'none' : 'block';
 
-  for (const r of requests) {
+  for (const r of openRequests) {
     const tr = document.createElement('tr');
     const dateCell = r.booked_date ? formatDayAbbr(r.booked_date) : '';
     const timeCell = r.booked_start_time ? `${r.booked_start_time}\u2013${r.booked_end_time}` : '';
@@ -166,6 +170,25 @@ async function loadBookings() {
 }
 
 let currentMemberId = null;
+
+document.getElementById('emailTimetableBtn').addEventListener('click', async () => {
+  const input = document.getElementById('timetableEmail');
+  const btn = document.getElementById('emailTimetableBtn');
+  const email = input.value.trim();
+  if (!email) {
+    showToast('Enter an email address first');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    await api('POST', '/api/member/bookings/email-timetable', { email });
+    showToast(`Timetable sent to ${email}`);
+  } catch (err) {
+    showToast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 (async function init() {
   await loadSuppliers();

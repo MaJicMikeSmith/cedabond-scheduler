@@ -267,4 +267,56 @@ router.post('/requests/:id/decline', async (req, res) => {
   }
 });
 
+// Email a plain-text copy of this member's confirmed timetable to whatever
+// address they give us - handy for having on a phone at the venue. Goes
+// through the same sendEmail() test-mode lockdown as everything else.
+router.post('/bookings/email-timetable', async (req, res) => {
+  try {
+    const memberId = req.session.user.id;
+    const to = (req.body.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+
+    const member = getMember(memberId);
+    const companyLabel = member.company || member.name;
+
+    const bookings = db.prepare(`
+      SELECT sl.start_time, sl.end_time, d.label AS day_label, d.date AS day_date, s.name AS supplier_name
+      FROM bookings b
+      JOIN slots sl ON sl.id = b.slot_id
+      JOIN exhibition_days d ON d.id = sl.day_id
+      JOIN suppliers s ON s.id = b.supplier_id
+      WHERE b.member_id = ? AND b.cancelled_at IS NULL
+      ORDER BY d.date, sl.start_time
+    `).all(memberId);
+
+    if (!bookings.length) {
+      return res.status(400).json({ error: "You don't have any confirmed meetings yet" });
+    }
+
+    const dayAbbr = (iso) => {
+      const dt = new Date(iso + 'T00:00:00');
+      return dt.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase().slice(0, 3);
+    };
+    const ukDate = (iso) => {
+      const [y, m, d] = iso.split('-');
+      return `${d}-${m}-${y}`;
+    };
+
+    const lines = bookings.map(b =>
+      `${b.day_label} - ${dayAbbr(b.day_date)} (${ukDate(b.day_date)})  ${b.start_time}-${b.end_time}  ${b.supplier_name}`
+    );
+
+    await sendEmail(to, `Your Cedabond Exhibition meeting timetable - ${companyLabel}`,
+      `Hi,\n\nHere's ${companyLabel}'s confirmed meeting timetable for the Cedabond Exhibition:\n\n` +
+      lines.join('\n') + '\n');
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('member email timetable error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
 module.exports = router;
