@@ -232,4 +232,39 @@ router.post('/bookings/:id/cancel', async (req, res) => {
   }
 });
 
+// Decline a pending request - frees up a space in the supplier's 40-member
+// cap since declined requests don't count as active. Can't decline one
+// that's already been booked.
+router.post('/requests/:id/decline', async (req, res) => {
+  try {
+    const memberId = req.session.user.id;
+    const request = db.prepare('SELECT * FROM meeting_requests WHERE id = ? AND member_id = ?')
+      .get(req.params.id, memberId);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'pending') {
+      return res.status(409).json({ error: `This request is already ${request.status} and can't be declined` });
+    }
+
+    db.prepare("UPDATE meeting_requests SET status = 'declined' WHERE id = ?").run(request.id);
+
+    const member = getMember(memberId);
+    const companyLabel = member.company || member.name;
+    const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(request.supplier_id);
+
+    recordEvent('decline', {
+      request_id: request.id, supplier_id: request.supplier_id, supplier_name: supplier.name,
+      member_id: memberId, member_name: companyLabel
+    }, { supplierId: request.supplier_id, memberId });
+
+    await sendEmail(supplier.email, `${companyLabel} declined your meeting request`,
+      `Hi ${supplier.name},\n\n${companyLabel} has declined your meeting request. ` +
+      `This frees up a space if you'd like to request another member.\n`);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('member decline request error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
 module.exports = router;

@@ -20,7 +20,8 @@ async function loadRequests() {
     const dateCell = r.booked_date ? formatUKDate(r.booked_date) : '';
     const timeCell = r.booked_start_time ? `${r.booked_start_time}\u2013${r.booked_end_time}` : '';
     const statusCell = r.status === 'pending'
-      ? `<button class="pill pending" data-view="${r.supplier_id}" title="Click to view and book their available slots">Requested</button>`
+      ? `<button class="pill pending" data-view="${r.supplier_id}" title="Click to view and book their available slots">Requested</button>` +
+        ` <button class="secondary small" data-decline="${r.id}">Decline</button>`
       : `<span class="pill ${r.status}">${r.status}</span>`;
     tr.innerHTML = `<td>${r.supplier_name}</td><td>${dateCell}</td><td>${timeCell}</td>` +
       `<td>${statusCell}</td>`;
@@ -32,6 +33,21 @@ async function loadRequests() {
       document.getElementById('supplierSelect').value = btn.dataset.view;
       loadSlots(btn.dataset.view);
       document.getElementById('supplierSelect').scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+
+  tbody.querySelectorAll('button[data-decline]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Decline this meeting request? The supplier will be notified and can request someone else instead.')) return;
+      btn.disabled = true;
+      try {
+        await api('POST', `/api/member/requests/${btn.dataset.decline}/decline`);
+        showToast('Request declined');
+        await Promise.all([loadRequests(), loadSuppliers()]);
+      } catch (err) {
+        showToast(err.message);
+        btn.disabled = false;
+      }
     });
   });
 }

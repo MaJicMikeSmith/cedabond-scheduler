@@ -91,6 +91,7 @@ button.pill:hover { filter: brightness(0.94); }
 .pill.pending { background: #FBEADF; color: var(--warm); }
 .pill.booked { background: #E1F0EC; color: var(--accent-dark); }
 .pill.cancelled { background: #F1ECE2; color: var(--text-muted); }
+.pill.declined { background: #F1ECE2; color: var(--text-muted); }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--border); font-size: .88rem; }

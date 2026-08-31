@@ -57,6 +57,8 @@ function renderMembers() {
       statusHtml = '<span class="pill pending">Requested</span>';
     } else if (newSelections.has(m.id)) {
       statusHtml = '<span class="pill pending">Selected</span>';
+    } else if (m.request_status === 'declined') {
+      statusHtml = '<span class="pill">Declined</span>';
     } else if (m.request_status === 'cancelled') {
       statusHtml = '<span class="pill">Cancelled</span>';
     } else {
@@ -176,6 +178,7 @@ async function toggleSlot(slotId, action) {
     showToast(
       msg.type === 'booking' ? `${msg.member_name} booked ${msg.start_time}` :
       msg.type === 'cancellation' ? `${msg.member_name} cancelled ${msg.start_time} — now free` :
+      msg.type === 'decline' ? `${msg.member_name} declined your request — space freed up` :
       'Schedule updated'
     );
     loadSchedule();
