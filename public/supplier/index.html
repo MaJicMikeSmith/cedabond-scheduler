@@ -18,22 +18,17 @@
     <div class="grid-2">
       <div class="card card--pink">
         <h2>Members</h2>
-        <p class="muted">Tick the members you'd like to meet, then hit Request. Max 40 active requests at a time.</p>
+        <p class="muted">Click a member's name to request a meeting. Click "Requested" to cancel before they respond. Max 40 active requests at a time.</p>
         <table id="membersTable">
           <thead><tr>
-            <th></th>
             <th class="sortable" data-sort="name">Name</th>
-            <th class="sortable" data-sort="date">Date</th>
+            <th class="sortable" data-sort="date">Day</th>
             <th>Time</th>
             <th class="sortable" data-sort="bookings">Status</th>
           </tr></thead>
           <tbody></tbody>
         </table>
         <p class="empty" id="membersEmpty" style="display:none">No members loaded yet.</p>
-        <div style="margin-top:12px; display:flex; align-items:center; gap:14px;">
-          <button class="primary small" id="requestSelectedBtn" disabled>Request selected</button>
-          <span id="selectionCount" class="muted"></span>
-        </div>
       </div>
 
       <div class="card card--teal">

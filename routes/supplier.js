@@ -105,27 +105,47 @@ router.post('/requests/batch', async (req, res) => {
   }
 });
 
-// Send a meeting request to a member.
+// Send a meeting request to a member - one click on their name. Allows
+// re-requesting someone previously cancelled or declined, and enforces the
+// same MAX_REQUESTS cap as the batch route.
 router.post('/requests', async (req, res) => {
   try {
     const supplierId = req.session.user.id;
-    const { member_id } = req.body;
-    const member = db.prepare('SELECT * FROM members WHERE id = ?').get(member_id);
+    const memberId = Number(req.body.member_id);
+    const member = db.prepare('SELECT * FROM members WHERE id = ?').get(memberId);
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
     const existing = db.prepare('SELECT * FROM meeting_requests WHERE supplier_id = ? AND member_id = ?')
-      .get(supplierId, member_id);
-    if (existing) return res.status(409).json({ error: 'A request already exists for this member' });
+      .get(supplierId, memberId);
+    if (existing && (existing.status === 'pending' || existing.status === 'booked')) {
+      return res.status(409).json({ error: `A request already exists for this member (${existing.status})` });
+    }
+
+    const activeCount = db.prepare(`
+      SELECT COUNT(*) AS c FROM meeting_requests WHERE supplier_id = ? AND status IN ('pending', 'booked')
+    `).get(supplierId).c;
+    if (activeCount >= MAX_REQUESTS) {
+      return res.status(409).json({ error: `You're at the ${MAX_REQUESTS}-member limit - cancel one first` });
+    }
 
     const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(supplierId);
-    const result = db.prepare('INSERT INTO meeting_requests (supplier_id, member_id) VALUES (?, ?)')
-      .run(supplierId, member_id);
+
+    let requestId;
+    if (existing) {
+      db.prepare("UPDATE meeting_requests SET status = 'pending', created_at = datetime('now') WHERE id = ?")
+        .run(existing.id);
+      requestId = existing.id;
+    } else {
+      const result = db.prepare('INSERT INTO meeting_requests (supplier_id, member_id) VALUES (?, ?)')
+        .run(supplierId, memberId);
+      requestId = result.lastInsertRowid;
+    }
 
     recordEvent('request', {
-      request_id: result.lastInsertRowid,
+      request_id: requestId,
       supplier_id: supplierId, supplier_name: supplier.name,
-      member_id, member_name: member.name
-    }, { memberId: member_id });
+      member_id: memberId, member_name: member.name
+    }, { memberId });
 
     await sendEmail(member.email, `${supplier.name} would like to meet you at the exhibition`,
       `Hi ${member.name},\n\n${supplier.name} has requested a meeting with you at the exhibition. ` +
