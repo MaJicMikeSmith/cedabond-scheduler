@@ -20,6 +20,12 @@ function formatUKDate(iso) {
   return `${d}-${m}-${y}`;
 }
 
+function formatDayAbbr(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase().slice(0, 3);
+}
+
 function activeCount() {
   return allMembers.filter(m => m.booking_count > 0 || m.request_status === 'pending').length;
 }
@@ -54,7 +60,7 @@ function renderMembers() {
       const extra = m.booking_count > 1 ? ` (+${m.booking_count - 1} more)` : '';
       statusHtml = `<span class="pill booked">Booked${extra}</span>`;
     } else if (isPending) {
-      statusHtml = '<span class="pill pending">Requested</span>';
+      statusHtml = `<button class="pill pending" data-cancel-request="${m.request_id}" title="Click to cancel this request">Requested</button>`;
     } else if (newSelections.has(m.id)) {
       statusHtml = '<span class="pill pending">Selected</span>';
     } else if (m.request_status === 'declined') {
@@ -65,7 +71,7 @@ function renderMembers() {
       statusHtml = '';
     }
 
-    const dateCell = m.booked_date ? formatUKDate(m.booked_date) : '';
+    const dateCell = m.booked_date ? formatDayAbbr(m.booked_date) : '';
     const timeCell = m.booked_start_time ? `${m.booked_start_time}\u2013${m.booked_end_time}` : '';
 
     tr.innerHTML = `<td>${checkbox}</td><td>${m.name}</td><td>${dateCell}</td><td>${timeCell}</td><td>${statusHtml}</td>`;
@@ -90,6 +96,21 @@ function renderMembers() {
         newSelections.delete(id);
       }
       renderMembers();
+    });
+  });
+
+  tbody.querySelectorAll('button[data-cancel-request]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Cancel this meeting request? It will go back to "Request meeting".')) return;
+      btn.disabled = true;
+      try {
+        await api('POST', `/api/supplier/requests/${btn.dataset.cancelRequest}/cancel`);
+        showToast('Request cancelled');
+        await loadMembers();
+      } catch (err) {
+        showToast(err.message);
+        btn.disabled = false;
+      }
     });
   });
 

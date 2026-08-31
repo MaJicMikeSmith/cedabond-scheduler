@@ -4,6 +4,12 @@ function formatUKDate(iso) {
   return `${d}-${m}-${y}`;
 }
 
+function formatDayAbbr(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase().slice(0, 3);
+}
+
 let pendingRequestsBySupplier = {};
 
 async function loadRequests() {
@@ -17,7 +23,7 @@ async function loadRequests() {
 
   for (const r of requests) {
     const tr = document.createElement('tr');
-    const dateCell = r.booked_date ? formatUKDate(r.booked_date) : '';
+    const dateCell = r.booked_date ? formatDayAbbr(r.booked_date) : '';
     const timeCell = r.booked_start_time ? `${r.booked_start_time}\u2013${r.booked_end_time}` : '';
     const statusCell = r.status === 'pending'
       ? `<button class="pill pending" data-view="${r.supplier_id}" title="Click to view and book their available slots">Requested</button>` +

@@ -15,7 +15,7 @@ router.get('/members', (req, res) => {
     const supplierId = req.session.user.id;
     const members = db.prepare(`
       SELECT m.id, m.name, m.email,
-             r.status AS request_status,
+             r.id AS request_id, r.status AS request_status,
              (SELECT COUNT(*) FROM bookings b
                 WHERE b.member_id = m.id AND b.supplier_id = ? AND b.cancelled_at IS NULL) AS booking_count,
              d.date AS booked_date, sl.start_time AS booked_start_time, sl.end_time AS booked_end_time
@@ -191,6 +191,39 @@ router.post('/slots/:id/unblock', (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('supplier unblock slot error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+// Cancel a pending request - reverts it to unrequested so the supplier can
+// tick someone else instead. Only allowed before the member has booked a
+// time; once booked, this route refuses (use the schedule to manage that).
+router.post('/requests/:id/cancel', async (req, res) => {
+  try {
+    const supplierId = req.session.user.id;
+    const request = db.prepare('SELECT * FROM meeting_requests WHERE id = ? AND supplier_id = ?')
+      .get(req.params.id, supplierId);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status === 'booked') {
+      return res.status(409).json({ error: "Can't cancel - the member has already booked a time" });
+    }
+    if (request.status === 'cancelled') {
+      return res.status(409).json({ error: 'This request is already cancelled' });
+    }
+
+    db.prepare("UPDATE meeting_requests SET status = 'cancelled' WHERE id = ?").run(request.id);
+
+    const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(supplierId);
+    const member = db.prepare('SELECT * FROM members WHERE id = ?').get(request.member_id);
+
+    recordEvent('request_cancelled', {
+      request_id: request.id, supplier_id: supplierId, supplier_name: supplier.name,
+      member_id: request.member_id, member_name: member.company || member.name
+    }, { memberId: request.member_id });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('supplier cancel request error:', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
