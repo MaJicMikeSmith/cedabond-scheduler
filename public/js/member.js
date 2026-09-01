@@ -89,13 +89,22 @@ async function loadSuppliers() {
   }
   otherList.querySelectorAll('button[data-browse]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      showToast(`Showing available times for ${btn.textContent}`);
-      // A booking against this supplier is what actually moves them into
-      // the dropdown permanently - loadSlots itself doesn't do that, only
-      // a real booking does (see bookSlot). Until then, just show their
-      // slots directly.
+      // Not a permanent dropdown member until they actually book (see
+      // bookSlot), but the member still needs to clearly see whose slots
+      // they're looking at right now - so show their name in the dropdown
+      // temporarily. This option disappears the next time the list
+      // refreshes unless a real booking has since made it permanent.
+      const tempOption = document.createElement('option');
+      tempOption.value = btn.dataset.browse;
+      tempOption.textContent = btn.textContent;
+      tempOption.dataset.temp = 'true';
+      select.querySelectorAll('option[data-temp]').forEach(o => o.remove());
+      select.appendChild(tempOption);
+      select.value = btn.dataset.browse;
+      select.disabled = false;
+
       loadSlots(btn.dataset.browse);
-      document.getElementById('slotGrid').scrollIntoView({ behavior: 'smooth' });
+      document.getElementById('supplierSelect').scrollIntoView({ behavior: 'smooth' });
     });
   });
 }
