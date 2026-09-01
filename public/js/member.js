@@ -12,6 +12,7 @@ function formatDayAbbr(iso) {
 
 let pendingRequestsBySupplier = {};
 let currentSupplierId = null; // tracks whichever supplier's slots are showing, regardless of how they got there
+let currentDayId = null; // tracks whichever day tab is active, so a refresh (e.g. after booking) doesn't silently reset it
 
 async function loadRequests() {
   const requests = await api('GET', '/api/member/requests');
@@ -136,7 +137,11 @@ async function loadSlots(supplierId) {
   grid.innerHTML = '';
 
   // Tabs - only worth showing if there's more than one day.
-  let activeDayId = days[0][0];
+  // Reopen on whichever day was last active for this supplier, if it still
+  // exists in today's list - otherwise a refresh (e.g. right after booking)
+  // would silently jump back to Day 1 even when the booking succeeded on
+  // Day 2, which looks exactly like nothing happened.
+  let activeDayId = byDay.has(currentDayId) ? currentDayId : days[0][0];
   if (days.length > 1) {
     const tabs = document.createElement('div');
     tabs.className = 'day-tabs';
@@ -156,6 +161,7 @@ async function loadSlots(supplierId) {
 
   function renderDay(dayId) {
     activeDayId = dayId;
+    currentDayId = dayId;
     const { label, date, slots: daySlots } = byDay.get(dayId);
 
     grid.querySelectorAll('.day-tab').forEach(t => {
