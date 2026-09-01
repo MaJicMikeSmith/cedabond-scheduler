@@ -2,9 +2,11 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
+const BetterSqlite3Store = require('better-sqlite3-session-store')(session);
 const http = require('http');
 const { Server } = require('socket.io');
 
+const db = require('./db');
 const { requirePageRole } = require('./middleware/requireAuth');
 const { attachSocketServer } = require('./lib/sync');
 const { initSockets } = require('./sockets');
@@ -23,6 +25,12 @@ initSockets(io);
 
 app.use(express.json());
 app.use(session({
+  // Stored in the same SQLite database (on the persistent disk) rather than
+  // in memory - a server restart mid-event no longer logs everyone out.
+  store: new BetterSqlite3Store({
+    client: db,
+    expired: { clear: true, intervalMs: 15 * 60 * 1000 } // sweep expired sessions every 15 min
+  }),
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
