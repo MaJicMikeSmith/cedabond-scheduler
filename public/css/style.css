@@ -83,6 +83,7 @@ button.small { padding: 6px 10px; font-size: .8rem; }
 
 .muted { color: var(--text-muted); font-size: .85rem; }
 .empty { color: var(--text-muted); font-style: italic; padding: 18px 0; }
+.empty--box { border: 1px dashed var(--border); border-radius: var(--radius); padding: 16px; text-align: center; font-style: normal; margin-top: 8px; }
 
 .pill {
   display: inline-block; font-size: .72rem; font-weight: 600; padding: 3px 9px; border-radius: 999px;

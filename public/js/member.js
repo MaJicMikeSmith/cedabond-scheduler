@@ -65,17 +65,17 @@ async function loadRequests() {
 
 async function loadSuppliers() {
   const suppliers = await api('GET', '/api/member/suppliers');
-  const requesting = suppliers.filter(s => s.has_request);
-  const others = suppliers.filter(s => !s.has_request);
+  const dropdown = suppliers.filter(s => s.has_relationship);
+  const others = suppliers.filter(s => !s.has_relationship);
 
   const select = document.getElementById('supplierSelect');
-  if (!requesting.length) {
-    select.innerHTML = '<option value="">No suppliers have requested a meeting with you yet</option>';
+  if (!dropdown.length) {
+    select.innerHTML = '<option value="">Nothing here yet</option>';
     select.disabled = true;
   } else {
     select.disabled = false;
     select.innerHTML = '<option value="">Select a supplier…</option>' +
-      requesting.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      dropdown.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
   }
 
   const otherList = document.getElementById('otherSuppliersList');
@@ -88,8 +88,12 @@ async function loadSuppliers() {
     otherList.appendChild(li);
   }
   otherList.querySelectorAll('button[data-browse]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      select.value = ''; // this supplier isn't in the "requested" dropdown
+    btn.addEventListener('click', async () => {
+      showToast(`Showing available times for ${btn.textContent}`);
+      // A booking against this supplier is what actually moves them into
+      // the dropdown permanently - loadSlots itself doesn't do that, only
+      // a real booking does (see bookSlot). Until then, just show their
+      // slots directly.
       loadSlots(btn.dataset.browse);
       document.getElementById('slotGrid').scrollIntoView({ behavior: 'smooth' });
     });
@@ -107,7 +111,7 @@ async function loadSlots(supplierId) {
 
   const slots = await api('GET', `/api/member/suppliers/${supplierId}/slots`);
   if (!slots.length) {
-    grid.innerHTML = '<p class="empty">This supplier hasn\'t made any slots available yet.</p>';
+    grid.innerHTML = '<p class="empty empty--box">This supplier hasn\'t made any slots available yet.</p>';
     return;
   }
 
@@ -186,7 +190,7 @@ async function bookSlot(slotId, requestId, confirmCancel) {
       slot_id: slotId, request_id: requestId, confirm_cancel_booking_id: confirmCancel ? true : null
     });
     showToast('Slot booked');
-    await Promise.all([loadRequests(), loadBookings()]);
+    await Promise.all([loadRequests(), loadBookings(), loadSuppliers()]);
     loadSlots(currentSupplierId);
   } catch (err) {
     if (err.body && err.body.conflict) {
@@ -219,7 +223,7 @@ async function loadBookings() {
       try {
         await api('POST', `/api/member/bookings/${btn.dataset.cancel}/cancel`);
         showToast('Booking cancelled');
-        await Promise.all([loadRequests(), loadBookings()]);
+        await Promise.all([loadRequests(), loadBookings(), loadSuppliers()]);
         loadSlots(currentSupplierId);
       } catch (err) {
         showToast(err.message);

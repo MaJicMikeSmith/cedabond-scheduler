@@ -36,23 +36,32 @@ router.get('/requests', (req, res) => {
 
 // Suppliers who have requested a meeting with this member - not the full
 // supplier list. A member can only browse/book suppliers that requested them.
-// Every supplier, flagged with whether they've actively requested this
-// member. Members can now book with any supplier, requested or not - the
-// flag just lets the frontend split them into "who asked for you" vs
-// "everyone else you can browse".
+// Every supplier, flagged with whether the member has any real relationship
+// with them yet - an active request from the supplier, OR a booking the
+// member made themselves (even without a request). Either one "graduates"
+// a supplier permanently into the main dropdown, so a member can always
+// come back and manage a booking they made via the browse list too -
+// otherwise ad-hoc bookings would only be findable there once and then
+// vanish from view on the next page load.
 router.get('/suppliers', (req, res) => {
   try {
     const memberId = req.session.user.id;
     const suppliers = db.prepare(`
       SELECT s.id, s.name, s.company,
-             EXISTS (
-               SELECT 1 FROM meeting_requests r
-               WHERE r.supplier_id = s.id AND r.member_id = ? AND r.status IN ('pending', 'booked')
-             ) AS has_request
+             (
+               EXISTS (
+                 SELECT 1 FROM meeting_requests r
+                 WHERE r.supplier_id = s.id AND r.member_id = ? AND r.status IN ('pending', 'booked')
+               )
+               OR EXISTS (
+                 SELECT 1 FROM bookings b
+                 WHERE b.supplier_id = s.id AND b.member_id = ? AND b.cancelled_at IS NULL
+               )
+             ) AS has_relationship
       FROM suppliers s
       ORDER BY s.name
-    `).all(memberId);
-    res.json(suppliers.map(s => ({ ...s, has_request: !!s.has_request })));
+    `).all(memberId, memberId);
+    res.json(suppliers.map(s => ({ ...s, has_relationship: !!s.has_relationship })));
   } catch (err) {
     console.error('member suppliers list error:', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
@@ -121,24 +130,33 @@ router.post('/bookings', async (req, res) => {
       if (!request) return res.status(400).json({ error: 'Request not found for this supplier/company' });
     }
 
-    // The company can't double-book itself - same supplier twice, or two
-    // suppliers overlapping in time.
+    // The company can't double-book itself: same supplier twice, two
+    // suppliers overlapping in time on the same day, or the same clock-time
+    // slot on a different day (still worth flagging, even though it's not a
+    // physical clash, since it's easy to lose track of).
     const conflicts = db.prepare(`
-      SELECT b.id AS booking_id, sl.id AS slot_id, sl.start_time, sl.end_time, s.id AS supplier_id, s.name AS supplier_name, s.email AS supplier_email
+      SELECT b.id AS booking_id, sl.id AS slot_id, sl.start_time, sl.end_time, sl.day_id,
+             d.label AS day_label, s.id AS supplier_id, s.name AS supplier_name, s.email AS supplier_email
       FROM bookings b
       JOIN slots sl ON sl.id = b.slot_id
+      JOIN exhibition_days d ON d.id = sl.day_id
       JOIN suppliers s ON s.id = b.supplier_id
-      WHERE b.member_id = ? AND b.cancelled_at IS NULL AND sl.day_id = ?
-        AND (b.supplier_id = ? OR (sl.start_time < ? AND sl.end_time > ?))
-    `).all(memberId, slot.day_id, slot.supplier_id, slot.end_time, slot.start_time);
+      WHERE b.member_id = ? AND b.cancelled_at IS NULL
+        AND (
+          (sl.day_id = ? AND (b.supplier_id = ? OR (sl.start_time < ? AND sl.end_time > ?)))
+          OR sl.start_time = ?
+        )
+    `).all(memberId, slot.day_id, slot.supplier_id, slot.end_time, slot.start_time, slot.start_time);
 
     if (conflicts.length && !confirm_cancel_booking_id) {
       const first = conflicts[0];
+      const sameDay = first.day_id === slot.day_id;
       const extra = conflicts.length > 1 ? ` (and ${conflicts.length - 1} other booking${conflicts.length > 2 ? 's' : ''})` : '';
       return res.status(409).json({
         conflict: true,
         booking_id: first.booking_id,
-        message: `You already have a meeting with ${first.supplier_name} at ${first.start_time}-${first.end_time} today${extra}. ` +
+        message: `You already have a meeting with ${first.supplier_name} at ${first.start_time}-${first.end_time}` +
+          `${sameDay ? ' today' : ` on ${first.day_label}`}${extra}. ` +
           `Booking this one will cancel ${conflicts.length > 1 ? 'those meetings' : 'that meeting'} if it's still due to take place. Book anyway?`
       });
     }
