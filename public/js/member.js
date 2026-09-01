@@ -110,19 +110,48 @@ async function loadSlots(supplierId) {
   }
 
   const requestId = pendingRequestsBySupplier[supplierId] || null;
-  grid.innerHTML = '';
 
   const byDay = new Map();
   for (const s of slots) {
     if (!byDay.has(s.day_id)) byDay.set(s.day_id, { label: s.day_label, date: s.day_date, slots: [] });
     byDay.get(s.day_id).slots.push(s);
   }
+  const days = [...byDay.entries()]; // [ [day_id, {label, date, slots}], ... ]
 
-  for (const { label, date, slots: daySlots } of byDay.values()) {
+  grid.innerHTML = '';
+
+  // Tabs - only worth showing if there's more than one day.
+  let activeDayId = days[0][0];
+  if (days.length > 1) {
+    const tabs = document.createElement('div');
+    tabs.className = 'day-tabs';
+    for (const [dayId, { label, date }] of days) {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'day-tab';
+      tab.dataset.dayId = dayId;
+      tab.textContent = `${label} - ${formatDayAbbr(date)}`;
+      tabs.appendChild(tab);
+    }
+    grid.appendChild(tabs);
+  }
+
+  const panel = document.createElement('div');
+  grid.appendChild(panel);
+
+  function renderDay(dayId) {
+    activeDayId = dayId;
+    const { label, date, slots: daySlots } = byDay.get(dayId);
+
+    grid.querySelectorAll('.day-tab').forEach(t => {
+      t.classList.toggle('active', Number(t.dataset.dayId) === Number(dayId));
+    });
+
+    panel.innerHTML = '';
     const heading = document.createElement('h3');
     heading.className = 'day-heading';
     heading.textContent = `${label} - ${formatDayAbbr(date)} (${formatUKDate(date)})`;
-    grid.appendChild(heading);
+    panel.appendChild(heading);
 
     const wrap = document.createElement('div');
     wrap.className = 'slot-grid';
@@ -139,8 +168,14 @@ async function loadSlots(supplierId) {
       }
       wrap.appendChild(div);
     }
-    grid.appendChild(wrap);
+    panel.appendChild(wrap);
   }
+
+  grid.querySelectorAll('.day-tab').forEach(tab => {
+    tab.addEventListener('click', () => renderDay(tab.dataset.dayId));
+  });
+
+  renderDay(activeDayId);
 }
 
 async function bookSlot(slotId, requestId, confirmCancel) {

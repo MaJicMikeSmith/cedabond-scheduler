@@ -123,6 +123,16 @@ th.sortable.sort-active { color: var(--accent-dark); }
 
 .day-heading { margin: 18px 0 8px; font-size: .8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
 
+.day-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.day-tab {
+  background: none; border: none; border-bottom: 3px solid transparent;
+  padding: 8px 4px; font: inherit; font-weight: 600; font-size: .85rem;
+  color: var(--text-muted); cursor: pointer; margin-bottom: -1px;
+}
+.day-tab:hover { color: var(--text); }
+.day-tab.active { color: var(--accent-dark); border-bottom-color: var(--accent); }
+.day-tabs + div .day-heading:first-of-type { margin-top: 8px; }
+
 .toast {
   position: fixed; bottom: 20px; right: 20px; background: var(--text); color: #fff;
   padding: 10px 16px; border-radius: 8px; font-size: .85rem; opacity: 0; transform: translateY(8px);
