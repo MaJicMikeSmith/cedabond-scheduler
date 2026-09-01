@@ -11,6 +11,7 @@ function formatDayAbbr(iso) {
 }
 
 let pendingRequestsBySupplier = {};
+let currentSupplierId = null; // tracks whichever supplier's slots are showing, regardless of how they got there
 
 async function loadRequests() {
   const requests = await api('GET', '/api/member/requests');
@@ -101,6 +102,7 @@ document.getElementById('supplierSelect').addEventListener('change', function ()
 
 async function loadSlots(supplierId) {
   const grid = document.getElementById('slotGrid');
+  currentSupplierId = supplierId || null;
   if (!supplierId) { grid.innerHTML = ''; return; }
 
   const slots = await api('GET', `/api/member/suppliers/${supplierId}/slots`);
@@ -172,7 +174,7 @@ async function loadSlots(supplierId) {
   }
 
   grid.querySelectorAll('.day-tab').forEach(tab => {
-    tab.addEventListener('click', () => renderDay(tab.dataset.dayId));
+    tab.addEventListener('click', () => renderDay(Number(tab.dataset.dayId)));
   });
 
   renderDay(activeDayId);
@@ -185,7 +187,7 @@ async function bookSlot(slotId, requestId, confirmCancel) {
     });
     showToast('Slot booked');
     await Promise.all([loadRequests(), loadBookings()]);
-    loadSlots(document.getElementById('supplierSelect').value);
+    loadSlots(currentSupplierId);
   } catch (err) {
     if (err.body && err.body.conflict) {
       if (confirm(err.body.message)) {
@@ -218,7 +220,7 @@ async function loadBookings() {
         await api('POST', `/api/member/bookings/${btn.dataset.cancel}/cancel`);
         showToast('Booking cancelled');
         await Promise.all([loadRequests(), loadBookings()]);
-        loadSlots(document.getElementById('supplierSelect').value);
+        loadSlots(currentSupplierId);
       } catch (err) {
         showToast(err.message);
         btn.disabled = false;
@@ -260,8 +262,7 @@ document.getElementById('emailTimetableBtn').addEventListener('click', async () 
     );
     loadRequests();
     loadBookings();
-    const sel = document.getElementById('supplierSelect').value;
-    if (sel) loadSlots(sel);
+    if (currentSupplierId) loadSlots(currentSupplierId);
   });
   currentMemberId = me.id;
   document.getElementById('whoami').textContent = me.name;
