@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Portal — Cedabond Exhibition</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Cedabond Exhibition<small>Admin portal</small></div>
+    <div>
+      <button class="secondary small" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card card--pink">
+      <h2>Suppliers</h2>
+      <p class="muted">How many meeting slots each supplier still has open. Click a name to see their full schedule.</p>
+      <table id="suppliersTable">
+        <thead><tr id="suppliersHead"><th>Name</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="suppliersEmpty" style="display:none">No suppliers yet.</p>
+    </div>
+
+    <div class="card card--teal">
+      <h2>Members</h2>
+      <p class="muted">How many meetings each member has booked. Click a name to see their full schedule.</p>
+      <table id="membersTable">
+        <thead><tr id="membersHead"><th>Name</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="membersEmpty" style="display:none">No members yet.</p>
+    </div>
+
+    <div class="card card--blue" id="detailCard" style="display:none">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <h2 id="detailHeading">Detail</h2>
+        <button class="secondary small" id="detailClose">Close</button>
+      </div>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

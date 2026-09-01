@@ -42,6 +42,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/filemaker', require('./routes/filemaker'));
 app.use('/api/supplier', require('./routes/supplier'));
 app.use('/api/member', require('./routes/member'));
+app.use('/api/admin', require('./routes/admin'));
 
 // Gate the portal pages themselves behind login (the JS/CSS assets used by both
 // portals stay public so the pages can actually render before/while checking auth).
@@ -49,6 +50,7 @@ app.use('/api/member', require('./routes/member'));
 // no self-service registration flow, everything is set up via FileMaker.
 app.use('/supplier', requirePageRole('supplier'), express.static(path.join(__dirname, 'public/supplier')));
 app.use('/member', requirePageRole('member'), express.static(path.join(__dirname, 'public/member')));
+app.use('/admin', requirePageRole('admin'), express.static(path.join(__dirname, 'public/admin')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;

@@ -14,6 +14,7 @@
       <div style="display:flex; gap:8px; margin-bottom:18px">
         <button type="button" id="tabMember" class="primary small" style="flex:1">Member</button>
         <button type="button" id="tabSupplier" class="secondary small" style="flex:1">Supplier</button>
+        <button type="button" id="tabAdmin" class="secondary small" style="flex:1">Admin</button>
       </div>
       <form id="memberForm">
         <label for="memberPassword">Password</label>
@@ -29,28 +30,49 @@
         <div class="error" id="supplierErr"></div>
         <button type="submit" class="primary" style="width:100%">Sign in</button>
       </form>
+      <form id="adminForm" style="display:none">
+        <label for="adminPassword">Password</label>
+        <input type="password" id="adminPassword" required autocomplete="current-password">
+        <div class="error" id="adminErr"></div>
+        <button type="submit" class="primary" style="width:100%">Sign in</button>
+      </form>
     </div>
   </div>
   <script src="/js/common.js"></script>
   <script>
     const tabMember = document.getElementById('tabMember');
     const tabSupplier = document.getElementById('tabSupplier');
+    const tabAdmin = document.getElementById('tabAdmin');
     const memberForm = document.getElementById('memberForm');
     const supplierForm = document.getElementById('supplierForm');
+    const adminForm = document.getElementById('adminForm');
     function showMember() {
       memberForm.style.display = 'block';
       supplierForm.style.display = 'none';
+      adminForm.style.display = 'none';
       tabMember.className = 'primary small';
       tabSupplier.className = 'secondary small';
+      tabAdmin.className = 'secondary small';
     }
     function showSupplier() {
       memberForm.style.display = 'none';
       supplierForm.style.display = 'block';
+      adminForm.style.display = 'none';
       tabSupplier.className = 'primary small';
       tabMember.className = 'secondary small';
+      tabAdmin.className = 'secondary small';
+    }
+    function showAdmin() {
+      memberForm.style.display = 'none';
+      supplierForm.style.display = 'none';
+      adminForm.style.display = 'block';
+      tabAdmin.className = 'primary small';
+      tabMember.className = 'secondary small';
+      tabSupplier.className = 'secondary small';
     }
     tabMember.addEventListener('click', showMember);
     tabSupplier.addEventListener('click', showSupplier);
+    tabAdmin.addEventListener('click', showAdmin);
     memberForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const errEl = document.getElementById('memberErr');
@@ -71,6 +93,19 @@
       try {
         const data = await api('POST', '/api/auth/supplier-login', {
           password: document.getElementById('supplierPassword').value.trim()
+        });
+        window.location.href = data.redirect;
+      } catch (err) {
+        errEl.textContent = err.message;
+      }
+    });
+    adminForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('adminErr');
+      errEl.textContent = '';
+      try {
+        const data = await api('POST', '/api/auth/admin-login', {
+          password: document.getElementById('adminPassword').value.trim()
         });
         window.location.href = data.redirect;
       } catch (err) {

@@ -48,6 +48,20 @@ router.post('/supplier-login', (req, res) => {
   res.json({ ok: true, role: 'supplier', redirect: '/supplier/' });
 });
 
+// Admin login - a single shared password (set as the ADMIN_PASSWORD
+// environment variable), not a database row, since there's only ever one
+// admin user rather than many companies each needing their own record.
+router.post('/admin-login', (req, res) => {
+  const password = (req.body.password || '').trim();
+  if (!password) return res.status(400).json({ error: 'Password required' });
+  if (!process.env.ADMIN_PASSWORD || password !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Incorrect password' });
+  }
+
+  req.session.user = { id: 0, role: 'admin', name: 'Admin' };
+  res.json({ ok: true, role: 'admin', redirect: '/admin/' });
+});
+
 router.post('/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });
