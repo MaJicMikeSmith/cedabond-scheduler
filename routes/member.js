@@ -130,7 +130,8 @@ router.post('/bookings', async (req, res) => {
       if (!request) return res.status(400).json({ error: 'Request not found for this supplier/company' });
     }
 
-    // The company can't double-book itself: same supplier twice, two
+    // The company can't double-book itself: same supplier at all (any day -
+    // no reason to meet them twice across the whole exhibition), two
     // suppliers overlapping in time on the same day, or the same clock-time
     // slot on a different day (still worth flagging, even though it's not a
     // physical clash, since it's easy to lose track of).
@@ -143,10 +144,11 @@ router.post('/bookings', async (req, res) => {
       JOIN suppliers s ON s.id = b.supplier_id
       WHERE b.member_id = ? AND b.cancelled_at IS NULL
         AND (
-          (sl.day_id = ? AND (b.supplier_id = ? OR (sl.start_time < ? AND sl.end_time > ?)))
+          b.supplier_id = ?
+          OR (sl.day_id = ? AND sl.start_time < ? AND sl.end_time > ?)
           OR sl.start_time = ?
         )
-    `).all(memberId, slot.day_id, slot.supplier_id, slot.end_time, slot.start_time, slot.start_time);
+    `).all(memberId, slot.supplier_id, slot.day_id, slot.end_time, slot.start_time, slot.start_time);
 
     if (conflicts.length && !confirm_cancel_booking_id) {
       const first = conflicts[0];
