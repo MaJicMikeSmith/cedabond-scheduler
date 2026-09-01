@@ -48,6 +48,8 @@ a { color: var(--accent-dark); }
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 22px; margin-bottom: 20px; border-top: 4px solid var(--border);
 }
+#otherSuppliersList li { padding: 8px 0; border-bottom: 1px solid var(--border); }
+#otherSuppliersList li:last-child { border-bottom: none; }
 .card--teal { border-top-color: var(--accent); }
 .card--pink { border-top-color: var(--accent-pink); }
 .card--blue { border-top-color: var(--accent-blue); }

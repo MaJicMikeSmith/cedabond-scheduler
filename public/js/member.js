@@ -64,17 +64,40 @@ async function loadRequests() {
 
 async function loadSuppliers() {
   const suppliers = await api('GET', '/api/member/suppliers');
+  const requesting = suppliers.filter(s => s.has_request);
+  const others = suppliers.filter(s => !s.has_request);
+
   const select = document.getElementById('supplierSelect');
-  if (!suppliers.length) {
+  if (!requesting.length) {
     select.innerHTML = '<option value="">No suppliers have requested a meeting with you yet</option>';
     select.disabled = true;
   } else {
     select.disabled = false;
     select.innerHTML = '<option value="">Select a supplier…</option>' +
-      suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      requesting.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
   }
-  select.addEventListener('change', () => loadSlots(select.value));
+
+  const otherList = document.getElementById('otherSuppliersList');
+  const otherEmpty = document.getElementById('otherSuppliersEmpty');
+  otherList.innerHTML = '';
+  otherEmpty.style.display = others.length ? 'none' : 'block';
+  for (const s of others) {
+    const li = document.createElement('li');
+    li.innerHTML = `<button class="link-action" data-browse="${s.id}">${s.name}</button>`;
+    otherList.appendChild(li);
+  }
+  otherList.querySelectorAll('button[data-browse]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      select.value = ''; // this supplier isn't in the "requested" dropdown
+      loadSlots(btn.dataset.browse);
+      document.getElementById('slotGrid').scrollIntoView({ behavior: 'smooth' });
+    });
+  });
 }
+
+document.getElementById('supplierSelect').addEventListener('change', function () {
+  loadSlots(this.value);
+});
 
 async function loadSlots(supplierId) {
   const grid = document.getElementById('slotGrid');

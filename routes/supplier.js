@@ -206,9 +206,11 @@ router.post('/slots/:id/unblock', (req, res) => {
   }
 });
 
-// Cancel a pending request - reverts it to unrequested so the supplier can
-// tick someone else instead. Only allowed before the member has booked a
-// time; once booked, this route refuses (use the schedule to manage that).
+// Cancel a pending request - the supplier simply changed their mind, so this
+// deletes the request entirely rather than marking it "cancelled": from the
+// member's perspective it should look exactly like they were never asked.
+// Only allowed before the member has booked a time; once booked, this route
+// refuses (use the schedule to manage that).
 router.post('/requests/:id/cancel', async (req, res) => {
   try {
     const supplierId = req.session.user.id;
@@ -218,11 +220,8 @@ router.post('/requests/:id/cancel', async (req, res) => {
     if (request.status === 'booked') {
       return res.status(409).json({ error: "Can't cancel - the member has already booked a time" });
     }
-    if (request.status === 'cancelled') {
-      return res.status(409).json({ error: 'This request is already cancelled' });
-    }
 
-    db.prepare("UPDATE meeting_requests SET status = 'cancelled' WHERE id = ?").run(request.id);
+    db.prepare('DELETE FROM meeting_requests WHERE id = ?').run(request.id);
 
     const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(supplierId);
     const member = db.prepare('SELECT * FROM members WHERE id = ?').get(request.member_id);

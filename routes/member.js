@@ -36,17 +36,23 @@ router.get('/requests', (req, res) => {
 
 // Suppliers who have requested a meeting with this member - not the full
 // supplier list. A member can only browse/book suppliers that requested them.
+// Every supplier, flagged with whether they've actively requested this
+// member. Members can now book with any supplier, requested or not - the
+// flag just lets the frontend split them into "who asked for you" vs
+// "everyone else you can browse".
 router.get('/suppliers', (req, res) => {
   try {
     const memberId = req.session.user.id;
     const suppliers = db.prepare(`
-      SELECT DISTINCT s.id, s.name, s.company
+      SELECT s.id, s.name, s.company,
+             EXISTS (
+               SELECT 1 FROM meeting_requests r
+               WHERE r.supplier_id = s.id AND r.member_id = ? AND r.status IN ('pending', 'booked')
+             ) AS has_request
       FROM suppliers s
-      JOIN meeting_requests r ON r.supplier_id = s.id
-      WHERE r.member_id = ? AND r.status IN ('pending', 'booked')
       ORDER BY s.name
     `).all(memberId);
-    res.json(suppliers);
+    res.json(suppliers.map(s => ({ ...s, has_request: !!s.has_request })));
   } catch (err) {
     console.error('member suppliers list error:', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
