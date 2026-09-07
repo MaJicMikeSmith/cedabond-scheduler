@@ -131,10 +131,9 @@ router.post('/bookings', async (req, res) => {
     }
 
     // The company can't double-book itself: same supplier at all (any day -
-    // no reason to meet them twice across the whole exhibition), two
-    // suppliers overlapping in time on the same day, or the same clock-time
-    // slot on a different day (still worth flagging, even though it's not a
-    // physical clash, since it's easy to lose track of).
+    // no reason to meet them twice across the whole exhibition), or two
+    // suppliers overlapping in time on the same day. Same clock-time on a
+    // *different* day is fine - each day is independent.
     const conflicts = db.prepare(`
       SELECT b.id AS booking_id, sl.id AS slot_id, sl.start_time, sl.end_time, sl.day_id,
              d.label AS day_label, s.id AS supplier_id, s.name AS supplier_name, s.email AS supplier_email
@@ -146,9 +145,8 @@ router.post('/bookings', async (req, res) => {
         AND (
           b.supplier_id = ?
           OR (sl.day_id = ? AND sl.start_time < ? AND sl.end_time > ?)
-          OR sl.start_time = ?
         )
-    `).all(memberId, slot.supplier_id, slot.day_id, slot.end_time, slot.start_time, slot.start_time);
+    `).all(memberId, slot.supplier_id, slot.day_id, slot.end_time, slot.start_time);
 
     if (conflicts.length && !confirm_cancel_booking_id) {
       const first = conflicts[0];
