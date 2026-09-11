@@ -281,6 +281,7 @@ document.getElementById('emailTimetableBtn').addEventListener('click', async () 
     );
     loadRequests();
     loadBookings();
+    loadSuppliers();
     if (currentSupplierId) loadSlots(currentSupplierId);
   });
   currentMemberId = me.id;
