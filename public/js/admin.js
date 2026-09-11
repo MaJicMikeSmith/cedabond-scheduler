@@ -121,4 +121,11 @@ async function showMemberDetail(id) {
 
 (async function init() {
   await Promise.all([loadSuppliers(), loadMembers()]);
+
+  // Keep the dashboard current without needing a manual reload - this page has no
+  // real-time push connection like the member/supplier portals do.
+  setInterval(() => {
+    loadSuppliers();
+    loadMembers();
+  }, 60000);
 })();
