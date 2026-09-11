@@ -38,6 +38,7 @@ app.use(session({
 }));
 
 // API routes
+app.use('/api', (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/filemaker', require('./routes/filemaker'));
 app.use('/api/supplier', require('./routes/supplier'));
