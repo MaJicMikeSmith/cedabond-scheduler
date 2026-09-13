@@ -144,13 +144,16 @@ async function loadSchedule() {
     for (const s of byDay[day]) {
       const div = document.createElement('div');
       div.className = `slot ${s.status}`;
-      div.innerHTML = `${s.start_time}<small>${s.status === 'booked' ? (s.member_company || s.member_name) : s.status}</small>`;
+      // A blocked slot may carry a note (e.g. who's actually in a manually-
+      // arranged group meeting) - show that instead of just "blocked" when present.
+      const detail = s.status === 'booked' ? (s.member_company || s.member_name) : (s.note || s.status);
+      div.innerHTML = `${s.start_time}<small>${detail}</small>`;
       if (s.status === 'available') {
         div.title = 'Tap to block this slot';
         div.addEventListener('click', () => toggleSlot(s.id, 'block'));
       } else if (s.status === 'blocked') {
-        div.title = 'Tap to release this slot';
-        div.addEventListener('click', () => toggleSlot(s.id, 'unblock'));
+        div.title = s.note ? `Group meeting: ${s.note}` : 'Tap to release this slot';
+        if (!s.note) div.addEventListener('click', () => toggleSlot(s.id, 'unblock'));
       } else {
         div.title = `Booked by ${s.member_company || s.member_name}`;
       }
