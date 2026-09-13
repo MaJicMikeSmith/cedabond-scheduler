@@ -15,17 +15,26 @@ router.get('/members', (req, res) => {
     const members = db.prepare(`
       SELECT m.id, m.name, m.email,
              r.id AS request_id, r.status AS request_status,
-             (SELECT COUNT(*) FROM bookings b
-                WHERE b.member_id = m.id AND b.supplier_id = ? AND b.cancelled_at IS NULL) AS booking_count,
-             d.date AS booked_date, sl.start_time AS booked_start_time, sl.end_time AS booked_end_time
+             (
+               (SELECT COUNT(*) FROM bookings b
+                  WHERE b.member_id = m.id AND b.supplier_id = ? AND b.cancelled_at IS NULL)
+               +
+               (SELECT COUNT(*) FROM group_meeting_assignments g
+                  WHERE g.member_id = m.id AND g.supplier_id = ?)
+             ) AS booking_count,
+             COALESCE(d.date, gd.date) AS booked_date,
+             COALESCE(sl.start_time, g2.start_time) AS booked_start_time,
+             COALESCE(sl.end_time, g2.end_time) AS booked_end_time
       FROM members m
       LEFT JOIN meeting_requests r ON r.member_id = m.id AND r.supplier_id = ?
       LEFT JOIN bookings b2 ON b2.member_id = m.id AND b2.supplier_id = ? AND b2.cancelled_at IS NULL
       LEFT JOIN slots sl ON sl.id = b2.slot_id
       LEFT JOIN exhibition_days d ON d.id = sl.day_id
+      LEFT JOIN group_meeting_assignments g2 ON g2.member_id = m.id AND g2.supplier_id = ?
+      LEFT JOIN exhibition_days gd ON gd.id = g2.day_id
       GROUP BY m.id
       ORDER BY m.name
-    `).all(supplierId, supplierId, supplierId);
+    `).all(supplierId, supplierId, supplierId, supplierId, supplierId);
     res.json(members);
   } catch (err) {
     console.error('supplier members list error:', err);
