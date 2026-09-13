@@ -88,9 +88,10 @@ async function showSupplierDetail(id) {
     for (const s of daySlots) {
       const div = document.createElement('div');
       div.className = `slot ${s.status}`;
-      div.innerHTML = s.status === 'booked'
-        ? `${s.start_time}<small>${s.member_name}</small>`
-        : `${s.start_time}<small>${s.status}</small>`;
+      // A blocked slot may carry a note (e.g. who's actually in a manually-
+      // arranged group meeting) - show that instead of just "blocked" when present.
+      const detail = s.status === 'booked' ? s.member_name : (s.note || s.status);
+      div.innerHTML = `${s.start_time}<small>${detail}</small>`;
       wrap.appendChild(div);
     }
     body.appendChild(wrap);

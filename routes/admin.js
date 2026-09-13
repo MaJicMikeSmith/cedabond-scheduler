@@ -66,7 +66,7 @@ router.get('/suppliers/:id', (req, res) => {
     if (!supplier) return res.status(404).json({ error: 'Supplier not found' });
 
     const slots = db.prepare(`
-      SELECT sl.id, sl.start_time, sl.end_time, sl.status,
+      SELECT sl.id, sl.start_time, sl.end_time, sl.status, sl.note,
              d.id AS day_id, d.label AS day_label, d.date AS day_date,
              m.id AS member_id, COALESCE(m.company, m.name) AS member_name
       FROM slots sl
