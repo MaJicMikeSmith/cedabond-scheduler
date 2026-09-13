@@ -123,7 +123,7 @@ router.get('/bookings', (req, res) => {
             AND b2.cancelled_at IS NULL AND sl2.day_id = g.day_id AND sl2.start_time = g.start_time
         )
 
-      ORDER BY day_date, start_time
+      ORDER BY 6, 3
     `).all(memberId, memberId);
     res.json(bookings);
   } catch (err) {
@@ -340,7 +340,7 @@ router.post('/bookings/email-timetable', async (req, res) => {
             AND b2.cancelled_at IS NULL AND sl2.day_id = g.day_id AND sl2.start_time = g.start_time
         )
 
-      ORDER BY day_date, start_time
+      ORDER BY 4, 1
     `).all(memberId, memberId);
 
     if (!bookings.length) {
