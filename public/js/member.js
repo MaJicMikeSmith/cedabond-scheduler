@@ -226,8 +226,13 @@ async function loadBookings() {
 
   for (const b of bookings) {
     const tr = document.createElement('tr');
+    // Group meetings (e.g. CharDan/Eat PR) aren't real bookings - there's
+    // nothing to cancel here via the app, so show a plain label instead.
+    const actionCell = b.is_group
+      ? '<span class="muted small">Group meeting</span>'
+      : `<button class="danger small" data-cancel="${b.id}">Cancel</button>`;
     tr.innerHTML = `<td>${b.day_label} - ${formatDayAbbr(b.day_date)} (${formatUKDate(b.day_date)})</td><td>${b.start_time}–${b.end_time}</td>` +
-      `<td>${b.supplier_name}</td><td><button class="danger small" data-cancel="${b.id}">Cancel</button></td>`;
+      `<td>${b.supplier_name}</td><td>${actionCell}</td>`;
     tbody.appendChild(tr);
   }
 

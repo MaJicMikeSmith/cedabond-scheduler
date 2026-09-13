@@ -90,20 +90,41 @@ router.get('/suppliers/:id/slots', (req, res) => {
   }
 });
 
-// This company's current (non-cancelled) bookings.
+// This company's current (non-cancelled) bookings, plus any manually-arranged
+// group meetings (e.g. CharDan/Eat PR) that aren't real bookings in the
+// database - those exist only as blocked slots plus a row here, so they're
+// unioned in. The two members with a genuine individual CharDan booking
+// already covering their group slot are excluded from the group side to
+// avoid showing that same meeting twice.
 router.get('/bookings', (req, res) => {
   try {
     const memberId = req.session.user.id;
     const bookings = db.prepare(`
       SELECT b.id, b.created_at, sl.start_time, sl.end_time, d.label AS day_label, d.date AS day_date,
-             s.id AS supplier_id, s.name AS supplier_name, s.company AS supplier_company
+             s.id AS supplier_id, s.name AS supplier_name, s.company AS supplier_company, 0 AS is_group
       FROM bookings b
       JOIN slots sl ON sl.id = b.slot_id
       JOIN exhibition_days d ON d.id = sl.day_id
       JOIN suppliers s ON s.id = b.supplier_id
       WHERE b.member_id = ? AND b.cancelled_at IS NULL
-      ORDER BY d.date, sl.start_time
-    `).all(memberId);
+
+      UNION ALL
+
+      SELECT NULL AS id, NULL AS created_at, g.start_time, g.end_time, d.label AS day_label, d.date AS day_date,
+             s.id AS supplier_id, s.name AS supplier_name, s.company AS supplier_company, 1 AS is_group
+      FROM group_meeting_assignments g
+      JOIN exhibition_days d ON d.id = g.day_id
+      JOIN suppliers s ON s.id = g.supplier_id
+      WHERE g.member_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM bookings b2
+          JOIN slots sl2 ON sl2.id = b2.slot_id
+          WHERE b2.member_id = g.member_id AND b2.supplier_id = g.supplier_id
+            AND b2.cancelled_at IS NULL AND sl2.day_id = g.day_id AND sl2.start_time = g.start_time
+        )
+
+      ORDER BY day_date, start_time
+    `).all(memberId, memberId);
     res.json(bookings);
   } catch (err) {
     console.error('member bookings list error:', err);
@@ -304,8 +325,23 @@ router.post('/bookings/email-timetable', async (req, res) => {
       JOIN exhibition_days d ON d.id = sl.day_id
       JOIN suppliers s ON s.id = b.supplier_id
       WHERE b.member_id = ? AND b.cancelled_at IS NULL
-      ORDER BY d.date, sl.start_time
-    `).all(memberId);
+
+      UNION ALL
+
+      SELECT g.start_time, g.end_time, d.label AS day_label, d.date AS day_date, s.name AS supplier_name
+      FROM group_meeting_assignments g
+      JOIN exhibition_days d ON d.id = g.day_id
+      JOIN suppliers s ON s.id = g.supplier_id
+      WHERE g.member_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM bookings b2
+          JOIN slots sl2 ON sl2.id = b2.slot_id
+          WHERE b2.member_id = g.member_id AND b2.supplier_id = g.supplier_id
+            AND b2.cancelled_at IS NULL AND sl2.day_id = g.day_id AND sl2.start_time = g.start_time
+        )
+
+      ORDER BY day_date, start_time
+    `).all(memberId, memberId);
 
     if (!bookings.length) {
       return res.status(400).json({ error: "You don't have any confirmed meetings yet" });
