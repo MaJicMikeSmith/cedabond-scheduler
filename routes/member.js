@@ -123,6 +123,19 @@ router.post('/bookings', async (req, res) => {
     if (!slot) return res.status(404).json({ error: 'Slot not found' });
     if (slot.status !== 'available') return res.status(409).json({ error: 'That slot is no longer available' });
 
+    // Hard block, no override - this member is already committed to a
+    // manually-arranged group meeting (e.g. CharDan/Eat PR) at this exact
+    // day and time, which doesn't exist as a normal booking so the usual
+    // conflict logic below has no way to see it on its own.
+    const groupConflict = db.prepare(
+      'SELECT * FROM group_meeting_assignments WHERE member_id = ? AND day_id = ? AND start_time = ?'
+    ).get(memberId, slot.day_id, slot.start_time);
+    if (groupConflict) {
+      return res.status(409).json({
+        error: `You already have a group meeting arranged at this time - please check with the organiser before trying to book something else then.`
+      });
+    }
+
     let request = null;
     if (request_id) {
       request = db.prepare('SELECT * FROM meeting_requests WHERE id = ? AND member_id = ? AND supplier_id = ?')
@@ -131,9 +144,10 @@ router.post('/bookings', async (req, res) => {
     }
 
     // The company can't double-book itself: same supplier at all (any day -
-    // no reason to meet them twice across the whole exhibition), or two
-    // suppliers overlapping in time on the same day. Same clock-time on a
-    // *different* day is fine - each day is independent.
+    // no reason to meet them twice across the whole exhibition), two
+    // suppliers overlapping in time on the same day, or the same clock-time
+    // slot on a different day (still worth flagging, even though it's not a
+    // physical clash, since it's easy to lose track of).
     const conflicts = db.prepare(`
       SELECT b.id AS booking_id, sl.id AS slot_id, sl.start_time, sl.end_time, sl.day_id,
              d.label AS day_label, s.id AS supplier_id, s.name AS supplier_name, s.email AS supplier_email
@@ -145,8 +159,9 @@ router.post('/bookings', async (req, res) => {
         AND (
           b.supplier_id = ?
           OR (sl.day_id = ? AND sl.start_time < ? AND sl.end_time > ?)
+          OR sl.start_time = ?
         )
-    `).all(memberId, slot.supplier_id, slot.day_id, slot.end_time, slot.start_time);
+    `).all(memberId, slot.supplier_id, slot.day_id, slot.end_time, slot.start_time, slot.start_time);
 
     if (conflicts.length && !confirm_cancel_booking_id) {
       const first = conflicts[0];
