@@ -145,8 +145,9 @@ async function loadSchedule() {
       const div = document.createElement('div');
       div.className = `slot ${s.status}`;
       // A blocked slot may carry a note (e.g. who's actually in a manually-
-      // arranged group meeting) - show that instead of just "blocked" when present.
-      const detail = s.status === 'booked' ? (s.member_company || s.member_name) : (s.note || s.status);
+      // arranged group meeting) - show one member per line instead of just
+      // "blocked" when present, rather than one run-on comma-separated line.
+      const detail = s.status === 'booked' ? (s.member_company || s.member_name) : (s.note ? s.note.split(', ').join('<br>') : s.status);
       div.innerHTML = `${s.start_time}<small>${detail}</small>`;
       if (s.status === 'available') {
         div.title = 'Tap to block this slot';

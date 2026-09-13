@@ -156,7 +156,7 @@ router.get('/schedule', (req, res) => {
   try {
     const supplierId = req.session.user.id;
     const slots = db.prepare(`
-      SELECT s.id, s.start_time, s.end_time, s.status, d.label AS day_label, d.date AS day_date,
+      SELECT s.id, s.start_time, s.end_time, s.status, s.note, d.label AS day_label, d.date AS day_date,
              b.id AS booking_id, m.name AS member_name, m.company AS member_company
       FROM slots s
       JOIN exhibition_days d ON d.id = s.day_id
