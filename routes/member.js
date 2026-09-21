@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireRole } = require('../middleware/requireAuth');
+const { requireRole, requireNotLocked } = require('../middleware/requireAuth');
 const { recordEvent } = require('../lib/sync');
 const { sendTimetableEmail } = require('../lib/email');
 
@@ -134,7 +134,7 @@ router.get('/bookings', (req, res) => {
 
 // Book a slot - either to fulfil an existing request, or ad-hoc. Belongs to
 // the company as a whole, not whoever happens to be logged in at the time.
-router.post('/bookings', async (req, res) => {
+router.post('/bookings', requireNotLocked(), async (req, res) => {
   try {
     const memberId = req.session.user.id;
     const { slot_id, request_id, confirm_cancel_booking_id } = req.body;
@@ -242,7 +242,7 @@ router.post('/bookings', async (req, res) => {
 });
 
 // Cancel a booking - immediately frees the slot for anyone else to take.
-router.post('/bookings/:id/cancel', async (req, res) => {
+router.post('/bookings/:id/cancel', requireNotLocked(), async (req, res) => {
   try {
     const memberId = req.session.user.id;
     const booking = db.prepare('SELECT * FROM bookings WHERE id = ? AND member_id = ? AND cancelled_at IS NULL')
@@ -277,7 +277,7 @@ router.post('/bookings/:id/cancel', async (req, res) => {
 // Decline a pending request - frees up a space in the supplier's 40-member
 // cap since declined requests don't count as active. Can't decline one
 // that's already been booked.
-router.post('/requests/:id/decline', async (req, res) => {
+router.post('/requests/:id/decline', requireNotLocked(), async (req, res) => {
   try {
     const memberId = req.session.user.id;
     const request = db.prepare('SELECT * FROM meeting_requests WHERE id = ? AND member_id = ?')

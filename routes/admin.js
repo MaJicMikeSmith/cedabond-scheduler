@@ -13,7 +13,7 @@ function getDays() {
 router.get('/suppliers', (req, res) => {
   try {
     const days = getDays();
-    const suppliers = db.prepare('SELECT id, name, company FROM suppliers ORDER BY name').all();
+    const suppliers = db.prepare('SELECT id, name, company, locked FROM suppliers ORDER BY name').all();
 
     const result = suppliers.map(s => {
       const perDay = days.map(d => {
@@ -22,7 +22,7 @@ router.get('/suppliers', (req, res) => {
         `).get(s.id, d.id);
         return { day_id: d.id, day_label: d.label, available: row.c };
       });
-      return { id: s.id, name: s.name, company: s.company, days: perDay };
+      return { id: s.id, name: s.name, company: s.company, locked: !!s.locked, days: perDay };
     });
 
     res.json({ days: days.map(d => ({ id: d.id, label: d.label, date: d.date })), suppliers: result });
@@ -37,7 +37,7 @@ router.get('/suppliers', (req, res) => {
 router.get('/members', (req, res) => {
   try {
     const days = getDays();
-    const members = db.prepare('SELECT id, name, company FROM members ORDER BY name').all();
+    const members = db.prepare('SELECT id, name, company, locked FROM members ORDER BY name').all();
 
     const result = members.map(m => {
       const perDay = days.map(d => {
@@ -48,12 +48,50 @@ router.get('/members', (req, res) => {
         `).get(m.id, d.id);
         return { day_id: d.id, day_label: d.label, booked: row.c };
       });
-      return { id: m.id, name: m.name, company: m.company, days: perDay };
+      return { id: m.id, name: m.name, company: m.company, locked: !!m.locked, days: perDay };
     });
 
     res.json({ days: days.map(d => ({ id: d.id, label: d.label, date: d.date })), members: result });
   } catch (err) {
     console.error('admin members list error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+// Lock or unlock a single member's or supplier's account - while locked,
+// they can still log in and see everything, but every write route (booking,
+// requesting, blocking a slot, etc.) refuses with a clear message.
+router.post('/lock', (req, res) => {
+  try {
+    const { role, id, locked } = req.body;
+    if (role !== 'member' && role !== 'supplier') {
+      return res.status(400).json({ error: 'role must be "member" or "supplier"' });
+    }
+    const table = role === 'member' ? 'members' : 'suppliers';
+    const record = db.prepare(`SELECT id FROM ${table} WHERE id = ?`).get(id);
+    if (!record) return res.status(404).json({ error: `${role === 'member' ? 'Member' : 'Supplier'} not found` });
+
+    db.prepare(`UPDATE ${table} SET locked = ? WHERE id = ?`).run(locked ? 1 : 0, id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('admin lock error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+// Lock or unlock every member or every supplier at once - the "Lock all" /
+// "Unlock all" control above each admin table.
+router.post('/lock-all', (req, res) => {
+  try {
+    const { role, locked } = req.body;
+    if (role !== 'member' && role !== 'supplier') {
+      return res.status(400).json({ error: 'role must be "member" or "supplier"' });
+    }
+    const table = role === 'member' ? 'members' : 'suppliers';
+    db.prepare(`UPDATE ${table} SET locked = ?`).run(locked ? 1 : 0);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('admin lock-all error:', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });

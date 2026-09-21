@@ -13,8 +13,10 @@ function formatDayAbbr(iso) {
 async function loadSuppliers() {
   const { days, suppliers } = await api('GET', '/api/admin/suppliers');
 
+  ensureLockControls('suppliersTable', 'supplier');
+
   const head = document.getElementById('suppliersHead');
-  head.innerHTML = '<th>Name</th>' + days.map(d => `<th>${d.label} spaces left</th>`).join('') + '<th></th>';
+  head.innerHTML = '<th>Locked</th><th>Name</th>' + days.map(d => `<th>${d.label} spaces left</th>`).join('') + '<th></th>';
 
   const tbody = document.querySelector('#suppliersTable tbody');
   tbody.innerHTML = '';
@@ -22,7 +24,8 @@ async function loadSuppliers() {
 
   for (const s of suppliers) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><button class="link-action" data-supplier="${s.id}">${s.name}</button></td>` +
+    tr.innerHTML = `<td><input type="checkbox" data-lock-supplier="${s.id}" ${s.locked ? 'checked' : ''}></td>` +
+      `<td><button class="link-action" data-supplier="${s.id}">${s.name}</button></td>` +
       s.days.map(d => `<td>${d.available}</td>`).join('') +
       `<td><button class="secondary small" data-manage-supplier="${s.id}">Manage as</button></td>`;
     tbody.appendChild(tr);
@@ -35,13 +38,19 @@ async function loadSuppliers() {
   tbody.querySelectorAll('button[data-manage-supplier]').forEach(btn => {
     btn.addEventListener('click', () => manageAs('supplier', btn.dataset.manageSupplier));
   });
+
+  tbody.querySelectorAll('input[data-lock-supplier]').forEach(cb => {
+    cb.addEventListener('change', () => setLocked('supplier', cb.dataset.lockSupplier, cb.checked));
+  });
 }
 
 async function loadMembers() {
   const { days, members } = await api('GET', '/api/admin/members');
 
+  ensureLockControls('membersTable', 'member');
+
   const head = document.getElementById('membersHead');
-  head.innerHTML = '<th>Name</th>' + days.map(d => `<th>${d.label} booked</th>`).join('') + '<th></th>';
+  head.innerHTML = '<th>Locked</th><th>Name</th>' + days.map(d => `<th>${d.label} booked</th>`).join('') + '<th></th>';
 
   const tbody = document.querySelector('#membersTable tbody');
   tbody.innerHTML = '';
@@ -49,7 +58,8 @@ async function loadMembers() {
 
   for (const m of members) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><button class="link-action" data-member="${m.id}">${m.company || m.name}</button></td>` +
+    tr.innerHTML = `<td><input type="checkbox" data-lock-member="${m.id}" ${m.locked ? 'checked' : ''}></td>` +
+      `<td><button class="link-action" data-member="${m.id}">${m.company || m.name}</button></td>` +
       m.days.map(d => `<td>${d.booked}</td>`).join('') +
       `<td><button class="secondary small" data-manage-member="${m.id}">Manage as</button></td>`;
     tbody.appendChild(tr);
@@ -61,6 +71,61 @@ async function loadMembers() {
 
   tbody.querySelectorAll('button[data-manage-member]').forEach(btn => {
     btn.addEventListener('click', () => manageAs('member', btn.dataset.manageMember));
+  });
+
+  tbody.querySelectorAll('input[data-lock-member]').forEach(cb => {
+    cb.addEventListener('change', () => setLocked('member', cb.dataset.lockMember, cb.checked));
+  });
+}
+
+// Toggle a single member's/supplier's locked state via their row checkbox.
+async function setLocked(role, id, locked) {
+  try {
+    await api('POST', '/api/admin/lock', { role, id: Number(id), locked });
+    showToast(locked ? 'Account locked' : 'Account unlocked');
+  } catch (err) {
+    showToast(err.message);
+    // Re-fetch to put the checkbox back in sync with the real state.
+    if (role === 'supplier') loadSuppliers(); else loadMembers();
+  }
+}
+
+// Adds a "Lock all / Unlock all" control bar directly above the given table,
+// once - safe to call on every refresh without duplicating it.
+function ensureLockControls(tableId, role) {
+  const table = document.getElementById(tableId);
+  const barId = `${tableId}-lockControls`;
+  if (document.getElementById(barId)) return;
+
+  const bar = document.createElement('div');
+  bar.id = barId;
+  bar.style.cssText = 'margin-bottom:10px; display:flex; gap:8px;';
+  bar.innerHTML = `
+    <button class="secondary small" data-lock-all="${role}">Lock all</button>
+    <button class="secondary small" data-unlock-all="${role}">Unlock all</button>
+  `;
+  table.parentNode.insertBefore(bar, table);
+
+  bar.querySelector('[data-lock-all]').addEventListener('click', async () => {
+    if (!confirm(`Lock every ${role} so none of them can make changes?`)) return;
+    try {
+      await api('POST', '/api/admin/lock-all', { role, locked: true });
+      showToast(`All ${role}s locked`);
+      if (role === 'supplier') loadSuppliers(); else loadMembers();
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  bar.querySelector('[data-unlock-all]').addEventListener('click', async () => {
+    if (!confirm(`Unlock every ${role} so they can make changes again?`)) return;
+    try {
+      await api('POST', '/api/admin/lock-all', { role, locked: false });
+      showToast(`All ${role}s unlocked`);
+      if (role === 'supplier') loadSuppliers(); else loadMembers();
+    } catch (err) {
+      showToast(err.message);
+    }
   });
 }
 

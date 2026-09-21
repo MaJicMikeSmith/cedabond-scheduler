@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireRole } = require('../middleware/requireAuth');
+const { requireRole, requireNotLocked } = require('../middleware/requireAuth');
 const { recordEvent } = require('../lib/sync');
 
 const router = express.Router();
@@ -48,7 +48,7 @@ const MAX_REQUESTS = 40;
 // Only actions members that don't already have an active (pending/booked)
 // request - re-ticking a cancelled one re-activates it. Enforces a total
 // cap of MAX_REQUESTS active requests per supplier, counting existing ones.
-router.post('/requests/batch', async (req, res) => {
+router.post('/requests/batch', requireNotLocked(), async (req, res) => {
   try {
     const supplierId = req.session.user.id;
     const memberIds = Array.isArray(req.body.member_ids)
@@ -112,7 +112,7 @@ router.post('/requests/batch', async (req, res) => {
 // Send a meeting request to a member - one click on their name. Allows
 // re-requesting someone previously cancelled or declined, and enforces the
 // same MAX_REQUESTS cap as the batch route.
-router.post('/requests', async (req, res) => {
+router.post('/requests', requireNotLocked(), async (req, res) => {
   try {
     const supplierId = req.session.user.id;
     const memberId = Number(req.body.member_id);
@@ -182,7 +182,7 @@ router.get('/schedule', (req, res) => {
 });
 
 // Block a slot (e.g. lunch break) - only allowed while it's currently available.
-router.post('/slots/:id/block', (req, res) => {
+router.post('/slots/:id/block', requireNotLocked(), (req, res) => {
   try {
     const supplierId = req.session.user.id;
     const slot = db.prepare('SELECT * FROM slots WHERE id = ? AND supplier_id = ?').get(req.params.id, supplierId);
@@ -199,7 +199,7 @@ router.post('/slots/:id/block', (req, res) => {
 });
 
 // Release a previously blocked slot back to available.
-router.post('/slots/:id/unblock', (req, res) => {
+router.post('/slots/:id/unblock', requireNotLocked(), (req, res) => {
   try {
     const supplierId = req.session.user.id;
     const slot = db.prepare('SELECT * FROM slots WHERE id = ? AND supplier_id = ?').get(req.params.id, supplierId);
@@ -220,7 +220,7 @@ router.post('/slots/:id/unblock', (req, res) => {
 // member's perspective it should look exactly like they were never asked.
 // Only allowed before the member has booked a time; once booked, this route
 // refuses (use the schedule to manage that).
-router.post('/requests/:id/cancel', async (req, res) => {
+router.post('/requests/:id/cancel', requireNotLocked(), async (req, res) => {
   try {
     const supplierId = req.session.user.id;
     const request = db.prepare('SELECT * FROM meeting_requests WHERE id = ? AND supplier_id = ?')

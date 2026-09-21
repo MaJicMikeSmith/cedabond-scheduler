@@ -66,3 +66,16 @@ function showReturnToAdminIfNeeded(me) {
   document.body.style.paddingTop = '40px';
   document.getElementById('returnToAdminBtn').addEventListener('click', returnToAdmin);
 }
+
+/** Shows a clear, persistent banner when this member's/supplier's account
+ *  has been locked by admin - visible the moment they log in, before they
+ *  try anything. The backend still refuses every write action regardless;
+ *  this is just so it's obvious why, right away. */
+function showLockedBannerIfNeeded(me) {
+  if (!me.locked) return;
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:fixed; top:0; left:0; right:0; z-index:1000; background:#B8860B; color:#fff; text-align:center; padding:8px; font-size:14px;';
+  bar.textContent = 'No changes can currently be made on this account - please contact the organiser if you need something changed.';
+  document.body.prepend(bar);
+  document.body.style.paddingTop = document.body.style.paddingTop ? '80px' : '40px';
+}

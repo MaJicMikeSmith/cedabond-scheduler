@@ -188,4 +188,5 @@ async function toggleSlot(slotId, action) {
   });
   document.getElementById('whoami').textContent = me.name;
   showReturnToAdminIfNeeded(me);
+  showLockedBannerIfNeeded(me);
 })();

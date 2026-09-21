@@ -83,10 +83,19 @@ router.post('/logout', (req, res) => {
 router.get('/me', (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
   const { role, id } = req.session.user;
+
+  let locked = false;
+  if (role === 'member' || role === 'supplier') {
+    const table = role === 'member' ? 'members' : 'suppliers';
+    const record = db.prepare(`SELECT locked FROM ${table} WHERE id = ?`).get(id);
+    locked = !!(record && record.locked);
+  }
+
   res.json({
     ...req.session.user,
     socketToken: signSocketToken(role, id),
-    impersonating: !!req.session.impersonatingAdmin
+    impersonating: !!req.session.impersonatingAdmin,
+    locked
   });
 });
 
