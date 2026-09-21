@@ -187,4 +187,5 @@ async function toggleSlot(slotId, action) {
     loadMembers();
   });
   document.getElementById('whoami').textContent = me.name;
+  showReturnToAdminIfNeeded(me);
 })();

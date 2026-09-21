@@ -84,6 +84,37 @@ router.get('/suppliers/:id', (req, res) => {
   }
 });
 
+// Switch the current (admin) session into a member's or supplier's account,
+// so admin can manage their bookings/requests directly without ever needing
+// their password. The original admin identity is stashed in a session field
+// a member/supplier session can never set themselves, so /api/auth/return-to-admin
+// can only ever hand back a session that was genuinely admin to start with.
+router.post('/impersonate', (req, res) => {
+  try {
+    const { role, id } = req.body;
+    if (role !== 'member' && role !== 'supplier') {
+      return res.status(400).json({ error: 'role must be "member" or "supplier"' });
+    }
+    const table = role === 'member' ? 'members' : 'suppliers';
+    const record = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+    if (!record) return res.status(404).json({ error: `${role === 'member' ? 'Member' : 'Supplier'} not found` });
+
+    // Keep the very first admin identity if we're somehow already mid-impersonation
+    // (shouldn't happen via the UI, but avoids ever losing the way back to admin).
+    req.session.impersonatingAdmin = req.session.impersonatingAdmin || req.session.user;
+    req.session.user = {
+      id: record.id,
+      role,
+      name: record.company || record.name,
+      email: record.email
+    };
+    res.json({ ok: true, redirect: role === 'member' ? '/member/' : '/supplier/' });
+  } catch (err) {
+    console.error('admin impersonate error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
 // One member's confirmed bookings across every exhibition day.
 router.get('/members/:id', (req, res) => {
   try {

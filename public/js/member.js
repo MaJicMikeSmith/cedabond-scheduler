@@ -292,4 +292,5 @@ document.getElementById('emailTimetableBtn').addEventListener('click', async () 
   currentMemberId = me.id;
   document.getElementById('whoami').textContent = me.name;
   document.getElementById('requestsHeading').textContent = `Meeting requests for ${me.name}`;
+  showReturnToAdminIfNeeded(me);
 })();

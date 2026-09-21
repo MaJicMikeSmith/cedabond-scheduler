@@ -14,7 +14,7 @@ async function loadSuppliers() {
   const { days, suppliers } = await api('GET', '/api/admin/suppliers');
 
   const head = document.getElementById('suppliersHead');
-  head.innerHTML = '<th>Name</th>' + days.map(d => `<th>${d.label} spaces left</th>`).join('');
+  head.innerHTML = '<th>Name</th>' + days.map(d => `<th>${d.label} spaces left</th>`).join('') + '<th></th>';
 
   const tbody = document.querySelector('#suppliersTable tbody');
   tbody.innerHTML = '';
@@ -23,12 +23,17 @@ async function loadSuppliers() {
   for (const s of suppliers) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><button class="link-action" data-supplier="${s.id}">${s.name}</button></td>` +
-      s.days.map(d => `<td>${d.available}</td>`).join('');
+      s.days.map(d => `<td>${d.available}</td>`).join('') +
+      `<td><button class="secondary small" data-manage-supplier="${s.id}">Manage as</button></td>`;
     tbody.appendChild(tr);
   }
 
   tbody.querySelectorAll('button[data-supplier]').forEach(btn => {
     btn.addEventListener('click', () => showSupplierDetail(btn.dataset.supplier));
+  });
+
+  tbody.querySelectorAll('button[data-manage-supplier]').forEach(btn => {
+    btn.addEventListener('click', () => manageAs('supplier', btn.dataset.manageSupplier));
   });
 }
 
@@ -36,7 +41,7 @@ async function loadMembers() {
   const { days, members } = await api('GET', '/api/admin/members');
 
   const head = document.getElementById('membersHead');
-  head.innerHTML = '<th>Name</th>' + days.map(d => `<th>${d.label} booked</th>`).join('');
+  head.innerHTML = '<th>Name</th>' + days.map(d => `<th>${d.label} booked</th>`).join('') + '<th></th>';
 
   const tbody = document.querySelector('#membersTable tbody');
   tbody.innerHTML = '';
@@ -45,13 +50,30 @@ async function loadMembers() {
   for (const m of members) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><button class="link-action" data-member="${m.id}">${m.company || m.name}</button></td>` +
-      m.days.map(d => `<td>${d.booked}</td>`).join('');
+      m.days.map(d => `<td>${d.booked}</td>`).join('') +
+      `<td><button class="secondary small" data-manage-member="${m.id}">Manage as</button></td>`;
     tbody.appendChild(tr);
   }
 
   tbody.querySelectorAll('button[data-member]').forEach(btn => {
     btn.addEventListener('click', () => showMemberDetail(btn.dataset.member));
   });
+
+  tbody.querySelectorAll('button[data-manage-member]').forEach(btn => {
+    btn.addEventListener('click', () => manageAs('member', btn.dataset.manageMember));
+  });
+}
+
+// Switches this admin session into the chosen member's/supplier's account
+// (no password needed) so admin can manage their bookings directly. A
+// "Return to Admin" button appears on their portal to switch back.
+async function manageAs(role, id) {
+  try {
+    const { redirect } = await api('POST', '/api/admin/impersonate', { role, id: Number(id) });
+    window.location.href = redirect;
+  } catch (err) {
+    showToast(err.message);
+  }
 }
 
 function openDetail(heading) {

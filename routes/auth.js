@@ -62,6 +62,20 @@ router.post('/admin-login', (req, res) => {
   res.json({ ok: true, role: 'admin', redirect: '/admin/' });
 });
 
+// Switch back from an impersonated member/supplier session to the original
+// admin session. Only works if an admin genuinely started this via the
+// /api/admin/impersonate route below - session.impersonatingAdmin is never
+// set by anything a member or supplier can trigger themselves, so this
+// can't be used to self-escalate to admin.
+router.post('/return-to-admin', (req, res) => {
+  if (!req.session.impersonatingAdmin) {
+    return res.status(400).json({ error: 'Not currently managing on someone else\'s behalf' });
+  }
+  req.session.user = req.session.impersonatingAdmin;
+  delete req.session.impersonatingAdmin;
+  res.json({ ok: true, redirect: '/admin/' });
+});
+
 router.post('/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });
@@ -71,7 +85,8 @@ router.get('/me', (req, res) => {
   const { role, id } = req.session.user;
   res.json({
     ...req.session.user,
-    socketToken: signSocketToken(role, id)
+    socketToken: signSocketToken(role, id),
+    impersonating: !!req.session.impersonatingAdmin
   });
 });
 

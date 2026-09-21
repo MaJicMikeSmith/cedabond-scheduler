@@ -45,3 +45,24 @@ async function logout() {
   await api('POST', '/api/auth/logout');
   window.location.href = '/login.html';
 }
+
+/** Switches an admin-impersonated member/supplier session back to the
+ *  original admin session. Only ever called from the "Return to Admin"
+ *  button shown when me.impersonating is true. */
+async function returnToAdmin() {
+  const { redirect } = await api('POST', '/api/auth/return-to-admin');
+  window.location.href = redirect;
+}
+
+/** Shows a small fixed "Return to Admin" button in the top bar when this
+ *  session is an admin managing a member/supplier's account directly.
+ *  Call this once `me` is available, on both the member and supplier portals. */
+function showReturnToAdminIfNeeded(me) {
+  if (!me.impersonating) return;
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:fixed; top:0; left:0; right:0; z-index:1000; background:#7A1F1F; color:#fff; text-align:center; padding:8px; font-size:14px;';
+  bar.innerHTML = `Managing as <strong>${me.name}</strong> on behalf of Admin. <button id="returnToAdminBtn" style="margin-left:12px; padding:4px 12px; border-radius:6px; border:none; cursor:pointer;">Return to Admin</button>`;
+  document.body.prepend(bar);
+  document.body.style.paddingTop = '40px';
+  document.getElementById('returnToAdminBtn').addEventListener('click', returnToAdmin);
+}
